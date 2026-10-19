@@ -1,0 +1,83 @@
+name: Criativos-anuncios - gerar video automaticamente
+
+on:
+  push:
+    branches:
+      - main
+      - consolidar-criativos-anuncios-20261019
+    paths:
+      - ads/requests/**
+  workflow_dispatch:
+    inputs:
+      request_file:
+        description: "Pedido JSON em ads/requests/ (sem alterar o site)"
+        required: true
+        type: string
+        default: "ads/requests/lowcost-europa-cinco-fotos.json"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: Render privado e QA de voz + todas as cenas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Preparar motor e bibliotecas
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y ffmpeg)
+          command -v ffprobe >/dev/null
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q piper-tts pillow
+      - name: Escolher pedido
+        shell: bash
+        env:
+          DISPATCH_REQUEST: ${{ inputs.request_file }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REQUEST="$DISPATCH_REQUEST"
+          else
+            REQUEST="$(git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" | grep '^ads/requests/[a-zA-Z0-9_-]*\.json$' | head -n 1 || true)"
+          fi
+          case "$REQUEST" in
+            ads/requests/*.json) ;;
+            *) echo "Invalid or missing request path" >&2; exit 1 ;;
+          esac
+          test -f "$REQUEST"
+          echo "REQUEST_FILE=$REQUEST" >> "$GITHUB_ENV"
+          echo "INPUT: $REQUEST"
+      - name: Criar anuncio com fotografias e voz sincronizada
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python tools/criativos_anuncios/render.py --request "$REQUEST_FILE" --output-dir ad-output
+      - name: Mostrar testes da entrega
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ad-output/report.json
+          ffprobe -v error -show_entries stream=codec_type,codec_name,width,height:format=duration -of json ad-output/*.mp4
+          test -f ad-output/voice_ptpt.wav
+          test -f ad-output/preview_scenes.jpg
+      - name: Entregar MP4 de teste sem publicacao comercial
+        uses: actions/upload-artifact@v4
+        with:
+          name: criativos-anuncios-mp4-voz-qa
+          path: |
+            ad-output/*.mp4
+            ad-output/voice_ptpt.wav
+            ad-output/preview_scenes.jpg
+            ad-output/report.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "viral-ugc-chatgpt",
+  "version": "0.1.8",
+  "description": "Produzir anúncios MP4 com imagens aprovadas, voz portuguesa, música e sincronização automática no GitHub Actions.",
+  "license": "MIT",
+  "keywords": [
+    "publicidade",
+    "video",
+    "ugc",
+    "shorts",
+    "reels",
+    "storyboard",
+    "portuguese",
+    "piper",
+    "ffmpeg",
+    "open-source",
+    "playwright",
+    "website",
+    "screenshot"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Criativos-anuncios",
+        "shortDescription": "Anúncios com voz automática",
+        "longDescription": "Cria anúncios em vídeo com fotografias aprovadas, locução natural portuguesa e música; produz e verifica MP4 pelo GitHub Actions, sem publicação comercial automática.",
+        "developerName": "Forretas TV",
+        "category": "Productivity",
+        "capabilities": []
+      }
+    }
+  }
+}

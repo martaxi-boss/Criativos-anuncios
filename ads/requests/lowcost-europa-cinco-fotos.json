@@ -1,0 +1,62 @@
+{
+  "id": "lowcost-europa-cinco-fotos",
+  "title": "Lowcost Europa - anuncio vertical em portugues de Portugal",
+  "publish": false,
+  "commercial_release": false,
+  "voice": {
+    "model": "pt_PT-tugao-medium",
+    "intro_pause_s": 0.35,
+    "between_pause_s": 0.26,
+    "outro_pause_s": 0.8,
+    "sentences": [
+      "Equipamentos de estética profissional, sem perder tempo em centenas de anúncios.",
+      "Na Lowcost Europa selecionamos propostas de fornecedores terceiros. Procuramos boas oportunidades a baixo custo, com informação clara para ajudar a decidir.",
+      "Explore as categorias: cavitação e radiofrequência, hidrodermoabrasão, pressoterapia, HIFU e laser díodo.",
+      "Veja as imagens dos produtos, conheça os preços observados e compare características. Nós organizamos; você escolhe.",
+      "O foco está em opções com envio a partir de países europeus para Portugal, quando confirmado pelo fornecedor.",
+      "E a compra é sempre transparente: a Lowcost Europa não vende diretamente. A encomenda, o pagamento e as condições finais são tratados no parceiro.",
+      "Lowcost Europa. Tecnologia para a estética. Escolhas com critério."
+    ]
+  },
+  "scenes": [
+    {
+      "image_url": "https://vcam-studio-pt.floot.app/_cdn/static/bdcbe75a-acc8-468d-9780-c6311d8a3637-lowcost_exact_01.png",
+      "voice_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "image_url": "https://vcam-studio-pt.floot.app/_cdn/static/64c8b491-fd63-4d6e-bf6a-7e386c05e78b-lowcost_exact_02.png",
+      "voice_range": [
+        2,
+        3
+      ]
+    },
+    {
+      "image_url": "https://vcam-studio-pt.floot.app/_cdn/static/b5749611-8bbf-4c0f-a21c-687aa1402461-lowcost_exact_03.png",
+      "voice_range": [
+        3,
+        5
+      ]
+    },
+    {
+      "image_url": "https://vcam-studio-pt.floot.app/_cdn/static/82d37b1b-1b71-4f3a-b98c-656b7c75171d-lowcost_exact_04.png",
+      "voice_range": [
+        5,
+        6
+      ]
+    },
+    {
+      "image_url": "https://vcam-studio-pt.floot.app/_cdn/static/e3c28eb9-062c-4029-9d95-af55d7119ca9-lowcost_exact_05.png",
+      "voice_range": [
+        6,
+        7
+      ]
+    }
+  ],
+  "music": {
+    "url": "https://vcam-studio-pt.floot.app/_cdn/static/ed009e1c-5052-429b-8653-10fbc7447a4e-ugc_lowcost_source_23s.mp4",
+    "provenance": "Instrumental preexistente do anuncio Lowcost Europa. Apenas teste privado; direitos comerciais pendentes de comprovativo."
+  }
+}

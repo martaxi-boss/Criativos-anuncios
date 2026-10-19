@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+ad-output/
+media/
+*.onnx
+*.onnx.json
+.env
+.env.*
+!.env.example

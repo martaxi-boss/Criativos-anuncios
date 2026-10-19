@@ -13,6 +13,10 @@ Motor reutilizável de produção de anúncios verticais em português de Portug
 
 Pode executar localmente: `python tools/criativos_anuncios/render.py --request ads/requests/lowcost-europa-cinco-fotos.json --output-dir ad-output`, após instalar Piper, Pillow e FFmpeg. Consultar `docs/GUIA.md`.
 
+## Edição fotográfica (montagens entre ambientes)
+
+Para substituir uma pessoa num cenário sem recortes artificiais, o plugin **Criativos-anuncios** passou a incluir um fluxo de edição generativa de imagens no ChatGPT (skill especializada da versão 0.1.9), com referências separadas para pessoa e ambiente e verificações de anatomia, perspetiva, luz e texto manuscrito. **Não é uma API de edição instalada no GitHub Actions:** a imagem é editada no ChatGPT e, após aprovação, pode ser fornecida ao motor de vídeo atual. Detalhes em [docs/EDICAO_FOTOGRAFICA.md](docs/EDICAO_FOTOGRAFICA.md). Não carregar fotografias privadas neste repositório público.
+
 ## Estado da entrega
 
 O motor teve execução de produção automática validada anteriormente em `martaxi-boss/lowcost-europa`, [GitHub Actions #39321551165](https://github.com/martaxi-boss/lowcost-europa/actions/runs/39321551165). A consolidação neste repositório preserva os scripts e a lógica testada. Novos vídeos produzidos a partir deste repositório precisam da verificação da respetiva execução.

@@ -271,12 +271,17 @@ def synthesize_voice(data: dict, media: Path, *, supplied: Path | None) -> tuple
     return wav_path,speech_starts,voice_timing,full_duration
 
 
-def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: Path, starts: list[float], total: float, media: Path, output: Path, *, fps: int = 25) -> list[float]:
+def scene_boundaries_for_speech(
+    data: dict, starts: list[float], total: float, count: int
+) -> list[float]:
+    """Compute shot cuts from actual measured TTS timings, with no audio stretch."""
+    if count != len(data["scenes"]):
+        raise ValueError("Scene count does not match visual sources")
     # Automatic campaigns may have more visual shots than spoken phrases.
     # Legacy manually supplied ads retain paragraph-synced scene cuts.
     mode=(data.get("source_capture") or {}).get("scene_timing")
     if mode == "even":
-        scene_boundaries=[total*i/len(photos) for i in range(len(photos)+1)]
+        scene_boundaries=[total*i/count for i in range(count+1)]
     elif mode == "voice_aligned":
         # Align every visual with the spoken phrase it depicts, splitting the
         # actual audio interval only when the same phrase has multiple photos.
@@ -301,6 +306,10 @@ def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: P
         scene_boundaries.append(total)
     if not all(b>a+0.6 for a,b in zip(scene_boundaries,scene_boundaries[1:])):
         raise ValueError("Too many visual scenes for actual spoken clip duration")
+
+
+def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: Path, starts: list[float], total: float, media: Path, output: Path, *, fps: int = 25) -> list[float]:
+    scene_boundaries=scene_boundaries_for_speech(data,starts,total,len(photos))
     widths=[scene_boundaries[i+1]-scene_boundaries[i] for i in range(len(photos))]
     args=["ffmpeg", "-hide_banner", "-y", "-loglevel", "error", "-nostdin"]
     for image,sec in zip(photos,widths):

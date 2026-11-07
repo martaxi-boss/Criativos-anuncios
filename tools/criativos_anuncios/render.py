@@ -207,9 +207,12 @@ def synthesize_voice(data: dict, media: Path, *, supplied: Path | None) -> tuple
             retrieve(CONFIG_URL, config, max_bytes=10*1024*1024)
         if config.stat().st_size < 100:
             raise ValueError("Piper voice config invalid")
+        length_scale=float(data.get("voice", {}).get("length_scale",1.0))
+        if not (0.85 <= length_scale <= 1.3):
+            raise ValueError("Piper length_scale must be between 0.85 and 1.30")
         piper=data.get("voice", {}).get("piper_bin") or str(Path(sys.executable).parent / "piper")
         for i,sentence in enumerate(voices):
-            result=run([piper, "--model", str(model), "--config", str(config), "--output_file", str(voice_dir/f"part_{i}.wav")],input_text=sentence+"\n",timeout=90)
+            result=run([piper, "--model", str(model), "--config", str(config), "--length_scale", str(length_scale), "--output_file", str(voice_dir/f"part_{i}.wav")],input_text=sentence+"\n",timeout=90)
             print(f"Piper part {i+1}/{len(voices)}: {result[:90]}",flush=True)
 
     start_silence=float(data["voice"].get("intro_pause_s", .35))
@@ -348,7 +351,7 @@ def main() -> None:
     output=folder/f"{slug}.mp4"
     bounds=make_video(photos,details,data,voice,starts,seconds,media,output)
     report=verify_output(output,photos,bounds,media)
-    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x["voice_range"],"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
+    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","voice_length_scale":float(data["voice"].get("length_scale",1.0)),"spoken_words":sum(len(s.split()) for s in data["voice"]["sentences"]),"source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x["voice_range"],"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
     (folder/"report.json").write_text(json.dumps(timeline,ensure_ascii=False,indent=2),encoding="utf-8")
     shutil.copyfile(voice,folder/"voice_ptpt.wav")
     shutil.copyfile(media/"qa_five_scenes.jpg",folder/"preview_scenes.jpg")

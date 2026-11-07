@@ -14,6 +14,8 @@ Uma única ordem com o endereço do site público pode iniciar a pré-visualiza�
 
 A GitHub Action existente recolhe as páginas reais com Chromium/Playwright, grava capturas de secções distintas e produz MP4, WAV, relatório e pré-visualização com a voz **Piper pt_PT-tugão-medium**. Esse é o mesmo modelo de voz usado na demonstração aprovada do proprietário. Não é uma voz humana gravada; cada locução nova deve ser ouvida antes de ser aceite para publicidade. Nenhuma fotografia precisa de ser fornecida manualmente se a página pública for acessível.
 
+O modo editorial tenta selecionar automaticamente o logótipo, o CTA e três cartões de produtos reais do DOM do site, criando composições verticais sem inventar preços, marcas ou fotografias. Quando o site não tiver estes elementos, a pré-visualização usa as capturas públicas originais e regista explicitamente a razão no campo `editorial` de `site_capture.json`. Esta composição não é uma captura literal do site, mas mantém os elementos recolhidos da mesma fonte.
+
 O resultado é **preview_only**. Capturas da página não são automaticamente um filme profissional aprovado. A locução pode alterar a duração do vídeo; não acelerar artificialmente para cumprir 20 segundos. Sem música licenciada, a prévia automática entrega apenas voz.
 
 O modo automático não faz login nem contorna bloqueios de redes sociais. Reels protegidos ou vídeos sem media original publicamente acessível e autorizado **não estão suportados só com um URL**; o sistema comunica esta limitação em vez de inventar cenas. Os projetos continuam independentes: este workflow executa apenas no próprio repositório GitHub, sem instalações na VPS Ferrari e sem alterar o website.

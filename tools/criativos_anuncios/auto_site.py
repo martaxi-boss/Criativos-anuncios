@@ -223,49 +223,86 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                             candidates[-1] = (cta_thumb, cta_png, -1)
                 except Exception:
                     pass  # Retain genuine product page capture on CTA failure.
-            # Prefer authentic enlarged product cards to tiny full-page captures.
-            # Every graphic used is captured from the SAME public website;
-            # no fake logo, stock media or fabricated product price.
-            editorial = {"mode": "site_screenshots", "product_cards": 0}
-            if len(candidates) >= 5:
+            # PREMIUM: image-only extraction, no product-card screenshots.
+            # Fail closed when real, reasonably sharp product photographs are absent.
+            from premium_scene import (
+                quality_metrics, product_slide, intro_slide, end_slide
+            )
+            import hashlib
+            cards = page.locator("main .product-card")
+            logo_el = page.locator("header img.brand-logo").first
+            if not await logo_el.count():
+                raise RuntimeError("Premium creative rejected: original brand logo missing")
+            logo_png = await logo_el.screenshot(timeout=12000,animations="disabled")
+            pool = []
+            rejected = []
+            digests = set()
+            for n in range(min(await cards.count(), 24)):
+                card = cards.nth(n)
+                image = card.locator("img.product-card__image").first
+                if not await image.count():
+                    rejected.append({"card_index":n,"reason":"no-original-photo"})
+                    continue
                 try:
-                    from editorial_scene import compose_product, compose_end
-                    logos = page.locator("header img.brand-logo")
-                    ctas = page.locator("main a.hero-primary-cta")
-                    headlines = page.locator("main h1")
-                    cards = page.locator("main .product-card")
-                    if (await logos.count() < 1 or await ctas.count() < 1 or
-                            await headlines.count() < 1 or await cards.count() < 3):
-                        raise RuntimeError("Required original logo, CTA, headline or 3 product cards not available")
-                    logo_png = await logos.first.screenshot(animations="disabled",timeout=12000)
-                    cta_png = await ctas.first.screenshot(animations="disabled",timeout=12000)
-                    headline_png = await headlines.first.screenshot(animations="disabled",timeout=12000)
-                    items = []
-                    framed = []
-                    for n in range(3):
-                        card=cards.nth(n)
-                        await card.scroll_into_view_if_needed(timeout=12000)
-                        await page.wait_for_timeout(450)
-                        raw=await card.screenshot(animations="disabled",timeout=12000)
-                        if len(raw) < 2000:
-                            raise RuntimeError("Original product card screenshot too small")
-                        img=compose_product(raw,logo_png,cta_png,meta["palette"])
-                        thumb=Image.open(__import__("io").BytesIO(img)).convert("RGB").resize((90,160))
-                        framed.append((thumb,img,-10-n))
-                        items.append((await card.inner_text(timeout=10000))[:320])
-                    end=compose_end(logo_png,headline_png,cta_png,meta["palette"])
-                    end_thumb=Image.open(__import__("io").BytesIO(end)).convert("RGB").resize((90,160))
-                    # Real site hero, three product close-ups and original brand CTA.
-                    candidates=[candidates[0],*framed,(end_thumb,end,-20)]
-                    editorial = {"mode": "authentic_editorial_composition",
-                                 "product_cards": 3,
-                                 "source_elements": [
-                                     "header img.brand-logo", "main .product-card",
-                                     "main h1", "main a.hero-primary-cta"],
-                                 "product_cards_text": items}
+                    await image.scroll_into_view_if_needed(timeout=8000)
+                    await page.wait_for_timeout(180)
+                    dims = await image.evaluate(
+                        "(el) => ({w:el.naturalWidth,h:el.naturalHeight,loaded:el.complete})"
+                    )
+                    if not dims.get("loaded"):
+                        await page.wait_for_timeout(650)
+                        dims = await image.evaluate(
+                            "(el) => ({w:el.naturalWidth,h:el.naturalHeight,loaded:el.complete})"
+                        )
+                    raw = await image.screenshot(timeout=12000,animations="disabled")
+                    metrics = quality_metrics(raw,int(dims["w"]),int(dims["h"]))
+                    name = " ".join((await card.locator("h3").first.inner_text()).split())
+                    digest = hashlib.sha256(raw).hexdigest()
+                    if not metrics["passes"] or digest in digests or not name:
+                        rejected.append({"card_index":n,"reason":"quality-or-duplicate",
+                                         "metrics":metrics})
+                        continue
+                    digests.add(digest)
+                    pool.append({"card_index":n,"image":raw,"name":name,
+                                 "digest":digest,"metrics":metrics})
                 except Exception as exc:
-                    editorial = {"mode": "site_screenshots", "product_cards": 0,
-                                 "composition_fallback_reason": str(exc)[:220]}
+                    rejected.append({"card_index":n,"reason":str(exc)[:170]})
+            pool.sort(key=lambda x:x["metrics"]["quality_score"],reverse=True)
+            if len(pool)<3:
+                raise RuntimeError(
+                    "Premium creative not generated: only "
+                    +str(len(pool))+
+                    " usable product photographs among "
+                    +str(min(await cards.count(),24))+
+                    " cards. Do not substitute cluttered screenshots."
+                )
+            products = pool[:3]
+            photos = [x["image"] for x in products]
+            palette=meta["palette"]
+            domain=(urlsplit(url).hostname or "")
+            scenes = [intro_slide(photos,logo_png,palette)]
+            scenes.extend(
+                product_slide(x["image"],logo_png,x["name"],palette,i)
+                for i,x in enumerate(products,start=1)
+            )
+            scenes.append(end_slide(logo_png,palette,domain))
+            candidates=[]
+            for n,png in enumerate(scenes):
+                im=Image.open(__import__("io").BytesIO(png)).convert("RGB")
+                candidates.append((im.resize((90,160)),png,-100-n))
+            editorial = {
+                "mode":"premium_product_photography",
+                "product_cards":len(products),
+                "source_elements":["header img.brand-logo",
+                                   "main .product-card__image",
+                                   "main .product-card h3",
+                                   "main a.hero-primary-cta"],
+                "selected":[{"category":x["name"],"card_index":x["card_index"],
+                             "image_sha256":x["digest"],
+                             "quality":x["metrics"]} for x in products],
+                "screening_rejections":rejected,
+                "quality_gate":"technical_screening_pass_editorial_review_pending"
+            }
             lines = make_voice_lines(meta)
             number = min(len(lines),len(candidates))
             for i,(_,png,_) in enumerate(candidates[:number],start=1):

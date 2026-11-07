@@ -47,28 +47,77 @@ def _choose(pool:list[dict], used:set[tuple], required_words:set[str] | None=Non
         choices=[p for p in choices if words(p["name"]).intersection(required_words)]
     if not choices:
         raise ValueError("No genuine, unused product photograph matches the spoken text")
+    if voice_text and not any(words(voice_text).intersection(words(x["name"])) for x in choices):
+        raise ValueError("Narration does not describe any verifiable product photo")
     selected=max(choices,key=rank)
     used.add(_photo_identity(selected))
     return selected
 
-def auto_script(brand:str, product_names:list[str], target_seconds:int) -> list[str]:
-    """Copy is created *from verified product categories*, not generic stock claims."""
+def _short(text: str, limit: int = 10) -> str:
+    words_=" ".join(str(text or "").split()).strip(" ,;:.!?").split(" ")
+    return " ".join(words_[:limit]).rstrip(" ,;:.!?")
+
+def auto_script(meta:dict, product_names:list[str], target_seconds:int) -> list[str]:
+    """Draft verified website-specific copy when a ChatGPT editorial script is absent.
+
+    This fallback is source-grounded, not a substitute for a creative copywriter.
+    An AI host should inspect the site brief and improve the narrative before
+    accepting a final advertisement.
+    """
     if len(product_names)<2:
         raise ValueError("Need at least 2 real product categories")
-    label=" ".join(str(brand or "").split())[:55]
+    label=_short(meta.get("brand") or meta.get("title"),6)
     if not label:
         raise ValueError("Verified brand missing")
-    # Longer ads describe more products. Voice stays relaxed, never force TTS speed.
+    title=_short(meta.get("h1"),10)
     target_phrases=max(3,min(16,round(target_seconds/4)))
     product_slots=min(len(product_names),target_phrases-2)
-    lines=[f"Conhece {label} e a sua seleção de equipamentos."]
-    for title in product_names[:product_slots]:
-        clean=" ".join(str(title).split()).strip(" ,;:.")[:75]
+    lines=[f"{label}: {title}." if title and label.casefold() not in title.casefold() else
+           f"Conhece {label} e o que encontras no site."]
+    formulas=[
+        "Nesta seleção encontras {}.",
+        "Explora também {}.",
+        "Descobre as opções de {}.",
+        "Conhece {}.",
+        "Vê em destaque {}.",
+    ]
+    for i,name in enumerate(product_names[:product_slots]):
+        clean=_short(name,8)
         if not clean:
-            raise ValueError("A real product title is empty")
-        lines.append(f"Descobre {clean}.")
-    lines.append(f"Encontra mais informações em {label}.")
+            raise ValueError("Product title missing in verified source")
+        lines.append(formulas[i%len(formulas)].format(clean))
+    # CTA is taken from the real page, not an invented claim or transaction.
+    lines.append(f"Explora mais opções no site de {label}.")
     return lines
+
+def business_brief(meta:dict, photographs:list[dict], target_seconds:int) -> dict:
+    """Facts for a ChatGPT-authored advertising concept; not a fabricated sales claim."""
+    if type(target_seconds) is not int or not 10<=target_seconds<=75:
+        raise ValueError("Invalid duration")
+    catalog=[]
+    for entry in photographs:
+        catalog.append({
+            "name":entry["name"],
+            "family_index":entry["family_index"],
+            "card_index":entry["card_index"],
+            "source":entry["source"],
+            "image_sha256":entry["digest"],
+            "quality":entry.get("metrics",{}).get("quality_score"),
+        })
+    return {
+        "source_url":meta["url"],
+        "brand":meta.get("brand") or meta.get("title"),
+        "public_heading":meta.get("h1"),
+        "public_lead":meta.get("lead"),
+        "public_secondary_heading":meta.get("h2"),
+        "public_description":meta.get("description"),
+        "real_cta":meta.get("cta"),
+        "palette":meta.get("palette"),
+        "target_seconds":target_seconds,
+        "verified_product_photographs":catalog,
+        "editorial_task":"Write an original explanatory advertising concept from the observed business and photographed products. Never invent benefits, prices or audiences. Map every spoken product claim to the matching verified photo and its hash.",
+        "approval_state":"editorial_pending",
+    }
 
 def build_storyboard(
     pool:list[dict],meta:dict,target_seconds:int,
@@ -123,8 +172,7 @@ def build_storyboard(
         raise ValueError("At least 2 genuine different photographs required")
 
     lines=list(voice_sentences) if voice_sentences is not None else auto_script(
-        meta.get("brand") or meta.get("title"), [p["name"] for p in ordered],
-        target_seconds)
+        meta, [p["name"] for p in ordered], target_seconds)
     if not 3<=len(lines)<=18 or any(not isinstance(t,str) or not 4<=len(t.strip())<=170 for t in lines):
         raise ValueError("Narration must contain 3-18 natural short phrases")
     word_count=sum(len(x.split()) for x in lines)
@@ -197,6 +245,7 @@ def build_storyboard(
         "paired_product_photos":len([x for x in voice_shots if x["kind"]=="product"]),
         "alignment":"voice_segment_boundaries",
         "source":"verified-public-website",
+        "script_origin":"assistant_editorial" if voice_sentences is not None else "verified_site_template_preview",
         "approval_state":"editorial_pending",
     }
     return lines,voice_shots,report

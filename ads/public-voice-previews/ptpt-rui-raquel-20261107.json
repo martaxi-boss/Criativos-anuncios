@@ -1,0 +1,13 @@
+{
+  "purpose": "private listening of authentic voice samples",
+  "voices": [
+    "pt-PT-Rui:MAI-Voice-2",
+    "pt-PT-RaquelNeural"
+  ],
+  "source_options": [
+    "Microsoft official voice listing",
+    "public sample page playht and tts.audio"
+  ],
+  "publish": false,
+  "commercial_release": false
+}

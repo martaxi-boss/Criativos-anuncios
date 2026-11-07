@@ -271,6 +271,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 with Image.open(dest) as im:
                     im.verify()
             request = captured_request(meta,number,stem,voice_sentences)
+            request["source_capture"]["visuals"] = editorial["mode"]
             (output/"auto_request.json").write_text(
                 json.dumps(request,indent=2,ensure_ascii=False)+"\n",encoding="utf-8"
             )

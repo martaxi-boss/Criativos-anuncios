@@ -67,6 +67,22 @@ class PremiumScenes(unittest.TestCase):
         clean=p.clean_photo(photo_bytes(size=(900,650)))
         self.assertEqual(clean.size,(900,650))
 
+    def test_actual_brand_and_cta_are_parameters_not_lowcost_constants(self):
+        photo=photo_bytes()
+        logo=logo_bytes()
+        pal={"bg":"#f7f7f2","accent":"#164f42","dark":"#103128"}
+        for data in (p.intro_slide([photo]*3,logo,pal,"Tecnologia especial para profissionais"),
+                     p.product_slide(photo,logo,"Equipamento teste",pal,1,brand="Marca Exemplo"),
+                     p.end_slide(logo,pal,"marca-exemplo.pt","Tecnologia especial","VER CATÁLOGO")):
+            with Image.open(BytesIO(data)) as im:
+                self.assertEqual(im.size,(864,1536))
+
+    def test_source_selection_excludes_full_website_cards(self):
+        source=(ROOT/"tools/criativos_anuncios/auto_site.py").read_text(encoding="utf-8")
+        self.assertIn('main .product-card__image',source)
+        self.assertIn('premium_product_photography',source)
+        self.assertNotIn('from editorial_scene import compose_product',source)
+
     def test_does_not_allow_missing_source_photo(self):
         with self.assertRaises(ValueError):
             p.product_slide(b"bad",logo_bytes(),"Real equipment",{},1)

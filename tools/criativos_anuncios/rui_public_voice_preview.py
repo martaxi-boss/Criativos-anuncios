@@ -50,11 +50,14 @@ async def visit(name:str,url:str,folder:Path,log:list) -> bool:
             response=await page.goto(url,wait_until="domcontentloaded",timeout=30000)
             await page.wait_for_timeout(1800)
             html=await page.content()
-            matched=list(re.finditer(r"Rui.{0,65}(MAI[- ]?Voice[- ]?2)",html,re.I))
-            preview=[html[max(0,m.start()-280):m.end()+520] for m in matched[:3]]
+            exact=list(re.finditer(r"Rui.{0,65}(MAI[- ]?Voice[- ]?2)",html,re.I))
+            ruimentions=list(re.finditer(r"\\bRui\\b",html,re.I))
+            matched=exact if exact else ruimentions
+            preview=[html[max(0,m.start()-320):m.end()+850] for m in matched[:5]]
             log.append({"provider":name,"status":response.status if response else None,
                         "title":await page.title(),
-                        "snippets":preview,"audio_elements":await page.locator("audio, source").count()})
+                        "snippets":preview,"exact_mai_voice2_name_present":bool(exact),
+                        "audio_elements":await page.locator("audio, source").count()})
             print("RUI_PREVIEW_SOURCE",name,"status",response.status if response else 0,
                   "matches",len(matched),flush=True)
             if response is None or response.status>=400 or not matched:
@@ -77,7 +80,7 @@ async def visit(name:str,url:str,folder:Path,log:list) -> bool:
                 await page.wait_for_timeout(2400)
             for link,data in audio_packets:
                 if is_mp3(data):
-                    output=folder/("Rui_HD_MAI_Voice_2_Demo_"+name.replace(".","_")+".mp3")
+                    output=folder/(("Rui_HD_MAI_Voice_2" if exact else "Rui_modelo_nao_confirmado")+"_Demo_"+name.replace(".","_")+".mp3")
                     output.write_bytes(data)
                     d=duration(output)
                     log[-1]["downloaded_audio"]={"file":output.name,"bytes":len(data),

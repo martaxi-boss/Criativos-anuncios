@@ -4,6 +4,16 @@ Motor reutilizável de produção de anúncios verticais em português de Portug
 
 **Fluxo:** pedido JSON com fotografias autorizadas, texto e música → voz Piper pt-PT → FFmpeg → sincronização automática das cenas com a locução → verificações de áudio e imagens → MP4 e relatório privado via GitHub Actions.
 
+## Conceito publicitário, guião e imagens relacionados
+
+A pessoa só fornece **o URL e a duração desejada**, se tiver uma preferência. O trabalho editorial é do **ChatGPT anfitrião**: ler o negócio/página, compreender para que serve, escolher o ângulo do anúncio, criar um texto explicativo original e construir uma narrativa com imagens autênticas, fala e plano correspondentes. Não pedir ao proprietário um guião ou fotografias que já estejam publicamente disponíveis.
+
+O runner GitHub Actions não inclui um redator com IA; os scripts atuais produzem `business_brief.json` (factos observados), `media_candidates.jpg/json` (fotografias), `storyboard.json` (ligações fala/imagem) e uma **pré-visualização de texto determinístico a partir da fonte**. Essa prévia **não deve ser rotulada como copy profissional de IA**. Para versão publicitária profissional, o ChatGPT analisa o briefing e imagens, escreve o guião de raiz e relança o mesmo workflow com as frases e escolhas de imagens verificadas. A pessoa não tem de preparar material nem gerir as fases.
+
+Em `storyboard.py` o número de fotos ajusta-se à duração; um bloco de fala pode ter várias imagens do MESMO produto. O renderizador usa `voice_index` e os tempos reais da locução Piper para sincronizar o visual, em vez de cortar o vídeo em intervalos iguais. Uma afirmação sobre um produto específico deve corresponder a uma fotografia validada dessa categoria. Se não houver imagem verdadeira, recusar a afirmação visual: não inventar produtos, descontos ou resultados.
+
+Reels de plataformas com login ou limitações técnicas requerem acesso autorizado ao media original. Um URL por si só não comprova que a plataforma disponibiliza o vídeo.
+
 ## Automação só com URL — sem fotografias manuais
 
 Uma única ordem com o endereço do site público pode iniciar a pré-visualização privada. Exemplo: criar um ficheiro novo em `ads/requests/` com o seguinte conteúdo:

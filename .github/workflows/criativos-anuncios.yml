@@ -47,7 +47,7 @@ jobs:
         shell: bash
         env:
           DISPATCH_REQUEST: ${{ inputs.request_file }}
-          SOURCE_URL: ${{ inputs.source_url }}
+          SOURCE_URL: ${{ env.AUTO_SOURCE_URL }}
         run: |
           set -euo pipefail
           if [ -n "$SOURCE_URL" ]; then
@@ -70,8 +70,29 @@ jobs:
           fi
           echo "REQUEST_FILE=$REQUEST" >> "$GITHUB_ENV"
           echo "INPUT: $REQUEST"
+      - name: Identificar site automatico do pedido (link no JSON ou dispatch)
+        shell: bash
+        env:
+          DISPATCH_SOURCE_URL: ${{ inputs.source_url }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          source = os.environ.get('DISPATCH_SOURCE_URL') or ''
+          file = os.environ['REQUEST_FILE']
+          if not source and file != 'ad-output/auto_request.json':
+              with open(file, encoding='utf-8') as handle:
+                  data=json.load(handle)
+              source = data.get('source_url') or ''
+          if source:
+              if not isinstance(source, str) or len(source)>2048 or any(x in source for x in '\r\n\t'):
+                  raise ValueError('Invalid public source URL')
+              with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as env:
+                  env.write('AUTO_SOURCE=1\n')
+                  env.write('AUTO_SOURCE_URL='+source+'\n')
+          PY
       - name: Capturar imagens reais do site publico sem fotografias manuais
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_url != '' }}
+        if: ${{ env.AUTO_SOURCE == '1' }}
         shell: bash
         env:
           SOURCE_URL: ${{ inputs.source_url }}

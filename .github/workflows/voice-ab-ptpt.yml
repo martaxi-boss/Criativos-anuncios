@@ -1,0 +1,72 @@
+name: Criativos - A/B vozes pt-PT Kokoro e Piper
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ads/voice-tests/*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  voice_comparison:
+    name: Comparar duas vozes portuguesas sem publicar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Preparar dependencias privadas deste projeto
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q             "tts-eu-pt==0.1.1" "piper-tts" "soundfile" "pillow"
+          command -v ffmpeg
+          .venv/bin/python -c "import tts_eu_pt, soundfile, torch; print('TTS_READY',torch.__version__)"
+      - name: Escolher o pedido de teste A/B
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUEST="$(git diff-tree --no-commit-id --name-only --diff-filter=A -r "${{ github.sha }}" | grep '^ads/voice-tests/[A-Za-z0-9_-]*\.json$' | head -n 1 || true)"
+          test -s "$REQUEST"
+          echo "file=$REQUEST" >> "$GITHUB_OUTPUT"
+      - name: Gerar duas vozes com as mesmas palavras
+        shell: bash
+        env:
+          REQUEST: ${{ steps.req.outputs.file }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python tools/criativos_anuncios/compare_voices.py             --request "$REQUEST" --output-dir voice-ab
+          test -s voice-ab/A_Kokoro_PT_PT.mp3
+          test -s voice-ab/B_Piper_PT_PT.mp3
+          test -s voice-ab/report.json
+          .venv/bin/python - <<'PY'
+          import json
+          r=json.load(open('voice-ab/report.json',encoding='utf-8'))
+          assert r['status']=='preview_only'
+          assert all(v['audio']['duration_seconds']>=3 for v in r['voice_labels'].values())
+          assert not r['published']
+          print('A_B_REAL_AUDIO_PASS')
+          PY
+      - name: Entregar amostras e relatorio
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptpt-comparacao-duas-vozes-${{ github.run_id }}
+          path: |
+            voice-ab/A_Kokoro_PT_PT.wav
+            voice-ab/B_Piper_PT_PT.wav
+            voice-ab/A_Kokoro_PT_PT.mp3
+            voice-ab/B_Piper_PT_PT.mp3
+            voice-ab/report.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error

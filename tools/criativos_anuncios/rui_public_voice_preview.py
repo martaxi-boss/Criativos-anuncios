@@ -51,7 +51,7 @@ async def visit(name:str,url:str,folder:Path,log:list) -> bool:
             await page.wait_for_timeout(1800)
             html=await page.content()
             exact=list(re.finditer(r"Rui.{0,65}(MAI[- ]?Voice[- ]?2)",html,re.I))
-            ruimentions=list(re.finditer(r"\\bRui\\b",html,re.I))
+            ruimentions=list(re.finditer(r"\bRui\b",html,re.I))
             matched=exact if exact else ruimentions
             preview=[html[max(0,m.start()-320):m.end()+850] for m in matched[:5]]
             log.append({"provider":name,"status":response.status if response else None,

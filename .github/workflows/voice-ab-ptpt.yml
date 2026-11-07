@@ -28,7 +28,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check --no-input -q             "tts-eu-pt==0.1.1" "piper-tts" "soundfile" "pillow"
+          # CPU-only torch: avoid CUDA packages on GitHub Actions.
+          .venv/bin/pip install --no-cache-dir --disable-pip-version-check --no-input torch --index-url https://download.pytorch.org/whl/cpu
+          .venv/bin/pip install --no-cache-dir --disable-pip-version-check --no-input "tts-eu-pt==0.1.1" "piper-tts" "soundfile" "pillow"
           command -v ffmpeg
           .venv/bin/python -c "import tts_eu_pt, soundfile, torch; print('TTS_READY',torch.__version__)"
       - name: Escolher o pedido de teste A/B

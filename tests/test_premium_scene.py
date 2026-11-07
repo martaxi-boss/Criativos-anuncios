@@ -53,6 +53,20 @@ class PremiumScenes(unittest.TestCase):
         good=p.quality_metrics(photo_bytes(),900,650)
         self.assertTrue(good["passes"],good)
 
+    def test_detected_embedded_website_footer_is_trimmed(self):
+        import PIL.ImageDraw as ImageDraw
+        im=Image.new("RGB",(800,800),"#747879")
+        d=ImageDraw.Draw(im)
+        d.rectangle((10,80,790,570),fill="#505f69")
+        d.rectangle((0,590,800,800),fill="#fafaf8")
+        d.text((40,625),"Seleção em avaliação",fill="#103c32")
+        b=BytesIO()
+        im.save(b,"PNG")
+        crop=p.clean_photo(b.getvalue())
+        self.assertLess(crop.height,im.height*.8)
+        clean=p.clean_photo(photo_bytes(size=(900,650)))
+        self.assertEqual(clean.size,(900,650))
+
     def test_does_not_allow_missing_source_photo(self):
         with self.assertRaises(ValueError):
             p.product_slide(b"bad",logo_bytes(),"Real equipment",{},1)

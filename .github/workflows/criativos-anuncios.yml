@@ -25,6 +25,8 @@ permissions:
 
 jobs:
   render:
+    # Old QA request deletions are hygiene, never a new render job.
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(join(github.event.head_commit.added, ','), 'ads/requests/') }}
     name: Render privado e QA de voz + todas as cenas
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -59,7 +61,7 @@ jobs:
             echo "AUTO_SOURCE=0" >> "$GITHUB_ENV"
           else
             echo "AUTO_SOURCE=0" >> "$GITHUB_ENV"
-            REQUEST="$(git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" | grep '^ads/requests/[a-zA-Z0-9_-]*\.json$' | head -n 1 || true)"
+            REQUEST="$(git diff-tree --no-commit-id --name-only --diff-filter=A -r "${{ github.sha }}" | grep '^ads/requests/[a-zA-Z0-9_-]*\.json$' | head -n 1 || true)"
           fi
           if [ "$REQUEST" != "ad-output/auto_request.json" ]; then
             case "$REQUEST" in

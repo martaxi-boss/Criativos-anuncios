@@ -1,0 +1,16 @@
+{
+  "id": "lowcost-europa-editorial-chatgpt-v16",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "target_duration_seconds": 20,
+  "creative_mode": "assistant_original_explanatory_script_from_verified_website",
+  "voice_preference": "approved-piper-pt-PT-tugao-medium",
+  "voice_sentences": [
+    "Na Lowcost Europa, descobre tecnologia para estética.",
+    "Explora equipamentos Aqua Peel para cuidados faciais.",
+    "Conhece também os aparelhos HIFU para estética profissional.",
+    "Compara máquinas de depilação a laser.",
+    "Vê equipamentos e preços no site. Escolhe com critério."
+  ],
+  "publish": false,
+  "commercial_release": false
+}

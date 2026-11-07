@@ -222,11 +222,16 @@ def render_request(intake:dict, storyboard:dict, output:Path) -> dict:
     work=output/"work"
     work.mkdir(exist_ok=True)
     source=Path(storyboard["intake_dir"]).resolve()
+    # Verify and snapshot all originals BEFORE writing scene files. Otherwise
+    # a reordered selection (scene_02 before scene_01) can overwrite its input.
+    snapshots=[]
     for pos,asset in actual:
         previous=source/"work"/asset["staged_image"]
         if previous.is_symlink() or not previous.is_file() or sha256(previous)!=asset["staged_sha256"]:
             raise ValueError("Staged source mismatch")
-        shutil.copyfile(previous,work/f"scene_{pos:02d}.png")
+        snapshots.append((pos,previous.read_bytes()))
+    for pos,contents in snapshots:
+        (work/f"scene_{pos:02d}.png").write_bytes(contents)
     request={
         "id":slug,"title":storyboard.get("title","Criativo"),
         "publish":False,"commercial_release":False,

@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 import subprocess
 import wave
+import imageio_ffmpeg
 
 VOICE="pt-PT-RaquelNeural"
 SAMPLE_RATE=44100
@@ -32,7 +33,7 @@ async def synthesize(request:dict,out:Path)->dict:
         if not raw.is_file() or raw.stat().st_size<3500:
             raise RuntimeError(f"Raquel returned no audio for paragraph {i}")
         wav=out/f"raquel_part_{i:02d}.wav"
-        subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-y","-i",str(raw),
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),"-hide_banner","-loglevel","error","-y","-i",str(raw),
                         "-ar",str(SAMPLE_RATE),"-ac","1","-c:a","pcm_s16le",str(wav)],
                        check=True,timeout=80)
         with wave.open(str(wav),"rb") as reader:
@@ -69,7 +70,7 @@ async def synthesize(request:dict,out:Path)->dict:
     if not 30<=total<=90:
         raise ValueError(f"Full Rui/Raquel explainer duration invalid {total}")
     mp3=out/"narracao_raquel_ptpt.mp3"
-    subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-y","-i",str(full),
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),"-hide_banner","-loglevel","error","-y","-i",str(full),
                     "-codec:a","libmp3lame","-b:a","192k",str(mp3)],
                    check=True,timeout=100)
     result={

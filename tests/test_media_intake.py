@@ -73,6 +73,29 @@ class MixedMediaIntake(unittest.TestCase):
                     self.assertEqual(im.size,(864,1536))
             self.assertTrue((output/"render_request.json").exists())
 
+    def test_reordered_photos_keep_original_bytes_and_hashes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            make_photo(root/"a.png","#0d3a44")
+            make_photo(root/"b.png","#a7b3aa")
+            output=root/"out"
+            manifest=intake.inspect_media([root/"a.png",root/"b.png"],output)
+            original=manifest["candidates"]
+            story={
+                "id":"reorder-check","target_duration_seconds":20,
+                "intake_dir":str(output),
+                "voice_sentences":["Primeira imagem real.", "Segunda imagem real."],
+                "shots":[
+                    {"candidate_id":"media-02","voice_index":0,"visual_caption":"Fotografia B"},
+                    {"candidate_id":"media-01","voice_index":1,"visual_caption":"Fotografia A"},
+                ]
+            }
+            intake.render_request(manifest,story,output)
+            self.assertEqual(intake.sha256(output/"work/scene_01.png"),
+                             original[1]["staged_sha256"])
+            self.assertEqual(intake.sha256(output/"work/scene_02.png"),
+                             original[0]["staged_sha256"])
+
     def test_rejects_unsupported_and_duplicate_private_files(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td)

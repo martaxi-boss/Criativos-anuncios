@@ -99,7 +99,44 @@ def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[st
     }
 
 
-async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None) -> dict:
+def make_media_contact_sheet(pool: list[dict], output: Path) -> None:
+    """Export a visual shortlist so the ChatGPT host can reject ugly partner posters."""
+    from io import BytesIO
+    from PIL import Image, ImageDraw, ImageOps, ImageFont
+    from premium_scene import clean_photo
+    width,cell_w,cell_h=1120,280,235
+    rows=(min(len(pool),32)+3)//4
+    canvas=Image.new("RGB",(width,75+rows*cell_h),"#f7f7f2")
+    draw=ImageDraw.Draw(canvas)
+    label_font=ImageFont.truetype("DejaVuSans.ttf",16)
+    header_font=ImageFont.truetype("DejaVuSans-Bold.ttf",24)
+    draw.text((19,16),"CANDIDATOS REAIS - REVER ANTES DO ANUNCIO",fill="#103c32",font=header_font)
+    meta=[]
+    for n,item in enumerate(pool):
+        ident=f"F{item['family_index']:02d}-C{item['card_index']:02d}-{item['source'][0]}"
+        meta.append({"id":ident,"family_index":item["family_index"],
+                     "card_index":item["card_index"],"source":item["source"],
+                     "category":item["name"],"image_sha256":item["digest"],
+                     "quality":item["metrics"]})
+        if n>=32:
+            continue
+        x=(n%4)*cell_w+10
+        y=75+(n//4)*cell_h
+        photo=clean_photo(item["image"])
+        photo=ImageOps.contain(photo,(256,170),Image.Resampling.LANCZOS)
+        canvas.paste(photo,(x+(256-photo.width)//2,y+(173-photo.height)//2))
+        draw.text((x+5,y+177),ident+"  "+str(item["metrics"]["quality_score"]),
+                  font=label_font,fill="#103c32")
+        label=item["name"].strip()[:34]
+        draw.text((x+5,y+200),label,font=label_font,fill="#4d6058")
+    output.mkdir(parents=True,exist_ok=True)
+    canvas.save(output/"media_candidates.jpg",quality=88)
+    (output/"media_candidates.json").write_text(
+        json.dumps(meta,ensure_ascii=False,indent=2)+"\n",encoding="utf-8"
+    )
+
+
+async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None) -> dict:
     from datetime import datetime, timezone
     from PIL import Image, ImageChops, ImageStat
     from playwright.async_api import async_playwright
@@ -333,6 +370,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 x["metrics"]["quality_score"]+
                 (0.04 if x["source"]=="public-detail-page" else 0)),
                 reverse=True)
+            make_media_contact_sheet(pool,output)
             if len(pool)<3:
                 raise RuntimeError(
                     "Premium creative not generated: only "
@@ -343,12 +381,26 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 )
             products=[]
             families=set()
-            for candidate in pool:
-                if candidate["family_index"] not in families:
-                    products.append(candidate)
-                    families.add(candidate["family_index"])
-                if len(products)==3:
-                    break
+            if preferred_photos is not None:
+                if (not isinstance(preferred_photos,list) or len(preferred_photos)!=3 or
+                        not all(isinstance(row,dict) for row in preferred_photos)):
+                    raise ValueError("preferred_photos must be exactly 3 verified source ids")
+                for pref in preferred_photos:
+                    matches=[x for x in pool if
+                        x["family_index"]==pref.get("family_index") and
+                        x["card_index"]==pref.get("card_index") and
+                        x["source"]==pref.get("source")]
+                    if len(matches)!=1 or matches[0]["family_index"] in families:
+                        raise ValueError("A curated photo is unavailable, duplicated or unverified")
+                    products.append(matches[0])
+                    families.add(matches[0]["family_index"])
+            else:
+                for candidate in pool:
+                    if candidate["family_index"] not in families:
+                        products.append(candidate)
+                        families.add(candidate["family_index"])
+                    if len(products)==3:
+                        break
             if len(products)<3:
                 raise RuntimeError("Insufficient distinct genuine product categories for premium creative")
             photos = [x["image"] for x in products]
@@ -377,6 +429,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                              "quality":x["metrics"]} for x in products],
                 "screening_rejections":rejected,
                 "candidate_count":len(pool), "detail_pages_visited":len(visited),
+                "selection_method":"host_visual_shortlist" if preferred_photos else "automated_quality_score",
                 "quality_gate":"technical_screening_pass_editorial_review_pending"
             }
             lines = make_voice_lines(meta)
@@ -423,12 +476,14 @@ def main() -> None:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,60}",args.id):
         parser.error("Invalid identifier")
     sentences=None
+    preferred=None
     if args.source_request:
         data=json.loads(args.source_request.read_text(encoding="utf-8"))
         if data.get("source_url") != args.url:
             raise ValueError("Original request URL does not match captured URL")
         sentences=data.get("voice_sentences")
-    result=asyncio.run(capture(args.url,args.output_dir,args.id,args.max_scenes,sentences))
+        preferred=data.get("preferred_photos")
+    result=asyncio.run(capture(args.url,args.output_dir,args.id,args.max_scenes,sentences,preferred))
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=="__main__":

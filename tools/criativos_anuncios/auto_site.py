@@ -467,7 +467,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 "business_brief":"business_brief.json",
                 "copywriting_origin":alignment["script_origin"],
                 "screenshots":[{"name":f"scene_{i+1:02d}.png","scroll_y":pos}
-                               for i,(_,__,pos) in enumerate(candidates[:number])],
+                               for i,(_,__,pos) in enumerate(candidates)],
                 "source_rights":"owner review required",
                 "narration":"existing approved pt_PT-tugao-medium model; generated text requires approval",
                 "approval_state":"preview_only"

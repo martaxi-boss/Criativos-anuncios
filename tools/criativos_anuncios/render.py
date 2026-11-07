@@ -266,11 +266,14 @@ def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: P
         args.extend(["-stream_loop","-1","-i",str(media/"music_source.bin")])
     args.extend(["-i",str(voice_file)])
     f=[]
+    editorial=(data.get("source_capture") or {}).get("visuals") == "authentic_editorial_composition"
     for i,duration in enumerate(widths):
-        # Pixel-sparing Ken Burns: true full-screen for the supplied 9:16 images.
-        # For images of other ratios, letterbox with brand green; NEVER cut header/logo.
+        # Genuine product elements receive a restrained 3% motion treatment.
+        # No aggressive zoom on the original site hero or final real-brand CTA.
         scale="scale=864:1536:force_original_aspect_ratio=decrease,pad=864:1536:(ow-iw)/2:(oh-ih)/2:color=0x103c32"
-        zoom="zoompan=z='min(zoom+0.000025,1.011)':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s=864x1536:fps=25"
+        speed="0.00026" if editorial and 1 <= i <= 3 else "0.000025"
+        cap="1.033" if editorial and 1 <= i <= 3 else "1.011"
+        zoom=f"zoompan=z='min(zoom+{speed},{cap})':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s=864x1536:fps=25"
         f.append(f"[{i}:v]{scale},format=rgb24,{zoom},trim=duration={duration:.5f},setpts=PTS-STARTPTS,fps={fps},settb=AVTB,format=yuv420p[v{i}]")
     concatenated="".join(f"[v{i}]" for i in range(len(photos)))
     f.append(f"{concatenated}concat=n={len(photos)}:v=1:a=0[video]")
@@ -283,7 +286,7 @@ def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: P
         f.append("[music][voice]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[sound]")
     else:
         f.append("[voice]alimiter=limit=0.95[sound]")
-    args.extend(["-filter_complex",";".join(f),"-map","[video]","-map","[sound]","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p","-r",str(fps),"-c:a","aac","-b:a","192k","-ar","44100","-t",f"{total:.5f}","-movflags","+faststart",str(output)])
+    args.extend(["-filter_complex",";".join(f),"-map","[video]","-map","[sound]","-c:v","libx264","-preset","medium" if editorial else "veryfast","-crf","18" if editorial else "21","-pix_fmt","yuv420p","-r",str(fps),"-c:a","aac","-b:a","192k","-ar","44100","-t",f"{total:.5f}","-movflags","+faststart",str(output)])
     run(args,timeout=360)
     return scene_boundaries
 

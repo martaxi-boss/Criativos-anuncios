@@ -6,6 +6,9 @@ import unittest
 from PIL import Image, ImageDraw
 
 ROOT=Path(__file__).resolve().parents[1]
+# The public script uses sibling imports when run as a script on GitHub Actions.
+import sys
+sys.path.insert(0,str(ROOT/"tools/criativos_anuncios"))
 def load(filename,label):
     spec=importlib.util.spec_from_file_location(label,ROOT/"tools/criativos_anuncios"/filename)
     mod=importlib.util.module_from_spec(spec)

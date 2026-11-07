@@ -20,7 +20,7 @@ jobs:
       - name: Install demo voice reader
         run: |
           python3 -m venv .venv
-          .venv/bin/pip install -q --disable-pip-version-check --no-input edge-tts
+          .venv/bin/pip install -q --disable-pip-version-check --no-input edge-tts mutagen
       - name: Generate pt-PT sample, verify MP3
         run: |
           .venv/bin/python tools/criativos_anuncios/microsoft_edge_voice_sample.py

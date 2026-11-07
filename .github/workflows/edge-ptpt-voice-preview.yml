@@ -1,0 +1,34 @@
+name: Criativos - amostra Raquel Neural pt-PT para ouvir
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ads/edge-voice-previews/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  private_preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install demo voice reader
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q --disable-pip-version-check --no-input edge-tts
+      - name: Generate pt-PT sample, verify MP3
+        run: |
+          .venv/bin/python tools/criativos_anuncios/microsoft_edge_voice_sample.py
+          ls -lh edge-voice-previews
+      - name: Save only verified voice samples
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-Raquel-ptPT-${{ github.run_id }}
+          path: edge-voice-previews/
+          if-no-files-found: error
+          retention-days: 7

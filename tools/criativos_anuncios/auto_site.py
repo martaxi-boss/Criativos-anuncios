@@ -137,7 +137,7 @@ def make_media_contact_sheet(pool: list[dict], output: Path) -> None:
     )
 
 
-async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None, target_seconds: int = 20) -> dict:
+async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None, target_seconds: int = 20, voice_settings: dict | None = None) -> dict:
     from datetime import datetime, timezone
     from PIL import Image, ImageChops, ImageStat
     from playwright.async_api import async_playwright
@@ -433,6 +433,17 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 with Image.open(dest) as im:
                     im.verify()
             request=captured_request(meta,len(copy),stem,copy,target_seconds)
+            if voice_settings is not None:
+                import math
+                if not isinstance(voice_settings,dict):
+                    raise ValueError("voice_settings must be a dictionary")
+                limits={"length_scale":(1.0,1.3),"between_pause_s":(0.25,0.9),
+                        "intro_pause_s":(0.2,1.2),"outro_pause_s":(0.4,1.8)}
+                for key,value in voice_settings.items():
+                    if (key not in limits or type(value) not in (int,float) or
+                        not math.isfinite(value) or not limits[key][0]<=value<=limits[key][1]):
+                        raise ValueError("Unsafe or out-of-range TTS pacing setting")
+                    request["voice"][key]=float(value)
             request["scenes"]=[
                 {"capture_index":n+1,
                  "voice_index":shot["voice_index"],
@@ -504,6 +515,7 @@ def main() -> None:
     sentences=None
     preferred=None
     target_seconds=20
+    voice_settings=None
     if args.source_request:
         data=json.loads(args.source_request.read_text(encoding="utf-8"))
         if data.get("source_url") != args.url:
@@ -511,9 +523,10 @@ def main() -> None:
         sentences=data.get("voice_sentences")
         preferred=data.get("preferred_photos")
         target_seconds=data.get("target_duration_seconds",20)
+        voice_settings=data.get("voice_settings")
     result=asyncio.run(capture(
         args.url,args.output_dir,args.id,args.max_scenes,
-        sentences,preferred,target_seconds
+        sentences,preferred,target_seconds,voice_settings
     ))
     print(json.dumps(result,ensure_ascii=False))
 

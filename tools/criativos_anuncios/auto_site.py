@@ -220,6 +220,49 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                             candidates[-1] = (cta_thumb, cta_png, -1)
                 except Exception:
                     pass  # Retain genuine product page capture on CTA failure.
+            # Prefer authentic enlarged product cards to tiny full-page captures.
+            # Every graphic used is captured from the SAME public website;
+            # no fake logo, stock media or fabricated product price.
+            editorial = {"mode": "site_screenshots", "product_cards": 0}
+            if len(candidates) >= 5:
+                try:
+                    from editorial_scene import compose_product, compose_end
+                    logos = page.locator("header img.brand-logo")
+                    ctas = page.locator("main a.hero-primary-cta")
+                    headlines = page.locator("main h1")
+                    cards = page.locator("main .product-card")
+                    if (await logos.count() < 1 or await ctas.count() < 1 or
+                            await headlines.count() < 1 or await cards.count() < 3):
+                        raise RuntimeError("Required original logo, CTA, headline or 3 product cards not available")
+                    logo_png = await logos.first.screenshot(animations="disabled",timeout=12000)
+                    cta_png = await ctas.first.screenshot(animations="disabled",timeout=12000)
+                    headline_png = await headlines.first.screenshot(animations="disabled",timeout=12000)
+                    items = []
+                    framed = []
+                    for n in range(3):
+                        card=cards.nth(n)
+                        await card.scroll_into_view_if_needed(timeout=12000)
+                        await page.wait_for_timeout(450)
+                        raw=await card.screenshot(animations="disabled",timeout=12000)
+                        if len(raw) < 2000:
+                            raise RuntimeError("Original product card screenshot too small")
+                        img=compose_product(raw,logo_png,cta_png,meta["palette"])
+                        thumb=Image.open(__import__("io").BytesIO(img)).convert("RGB").resize((90,160))
+                        framed.append((thumb,img,-10-n))
+                        items.append((await card.inner_text(timeout=10000))[:320])
+                    end=compose_end(logo_png,headline_png,cta_png,meta["palette"])
+                    end_thumb=Image.open(__import__("io").BytesIO(end)).convert("RGB").resize((90,160))
+                    # Real site hero, three product close-ups and original brand CTA.
+                    candidates=[candidates[0],*framed,(end_thumb,end,-20)]
+                    editorial = {"mode": "authentic_editorial_composition",
+                                 "product_cards": 3,
+                                 "source_elements": [
+                                     "header img.brand-logo", "main .product-card",
+                                     "main h1", "main a.hero-primary-cta"],
+                                 "product_cards_text": items}
+                except Exception as exc:
+                    editorial = {"mode": "site_screenshots", "product_cards": 0,
+                                 "composition_fallback_reason": str(exc)[:220]}
             lines = make_voice_lines(meta)
             number = min(len(lines),len(candidates))
             for i,(_,png,_) in enumerate(candidates[:number],start=1):
@@ -236,6 +279,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 "title":meta["title"],"brand":meta["brand"],"h1":meta["h1"],
                 "lead":meta.get("lead"),"h2":meta.get("h2"),"description":meta.get("description"),
                 "palette":meta["palette"],"cta":meta["cta"],
+                "editorial":editorial,
                 "screenshots":[{"name":f"scene_{i+1:02d}.png","scroll_y":pos}
                                for i,(_,__,pos) in enumerate(candidates[:number])],
                 "source_rights":"owner review required",

@@ -28,6 +28,21 @@ def image_from_bytes(source: bytes) -> Image.Image:
             raise ValueError("Source photograph too small or too large for advertisement")
         return ImageOps.exif_transpose(image).convert("RGB")
 
+def clean_photo(source: bytes) -> Image.Image:
+    """Trim a detected baked-in website-card footer; never inpaint or invent pixels."""
+    im=image_from_bytes(source)
+    w,h=im.size
+    if .8 <= w/h <= 1.35:
+        mid=im.crop((0,int(.40*h),w,int(.67*h))).resize((100,75))
+        bottom=im.crop((0,int(.77*h),w,int(.97*h))).resize((100,75))
+        white=lambda z: sum(1 for r,g,b in z.getdata() if min(r,g,b)>230)/7500
+        bright=sum(ImageStat.Stat(bottom).mean)/3
+        mid_bright=sum(ImageStat.Stat(mid).mean)/3
+        if white(bottom)>.67 and white(mid)<.40 and bright-mid_bright>28:
+            # Genuine photo above; footer below contains website UI / duplicated labels.
+            im=im.crop((0,0,w,int(h*.725)))
+    return im
+
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
 
@@ -45,10 +60,11 @@ def quality_metrics(source: bytes, natural_width: int = 0, natural_height: int =
         "natural_width": natural_width, "natural_height": natural_height,
         "color_stddev": variance, "edge_score": edge,
         "content_ratio": occupancy,
-        "quality_score": round(
+        "quality_score": round(max(0,
             0.48*min(variance, 85)/85 +
             0.26*min(edge, 17)/17 +
-            0.26*min(occupancy, .6)/.6, 4),
+            0.26*min(occupancy, .6)/.6 -
+            0.22*min(max(edge-29,0)/18,1)), 4),
         "passes": natural_width >= 500 and natural_height >= 350 and
                   variance >= 18 and edge >= 2.8 and occupancy >= .095
     }
@@ -84,7 +100,7 @@ def _text_lines(draw, text: str, font, max_width: int, max_lines=2) -> list[str]
     return lines
 
 def _product_image(canvas: Image.Image, raw: bytes, rect: tuple[int,int,int,int]):
-    product = image_from_bytes(raw)
+    product = clean_photo(raw)
     w,h=rect[2]-rect[0],rect[3]-rect[1]
     product=ImageOps.contain(product,(w,h),Image.Resampling.LANCZOS)
     x=rect[0]+(w-product.width)//2

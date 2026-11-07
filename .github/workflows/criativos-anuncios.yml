@@ -100,7 +100,14 @@ jobs:
           set -euo pipefail
           .venv/bin/pip install --disable-pip-version-check --no-input -q playwright
           .venv/bin/python -m playwright install chromium
-          .venv/bin/python tools/criativos_anuncios/auto_site.py             --url "$SOURCE_URL" --output-dir ad-output             --id "site-preview-${{ github.run_id }}"
+          if [ -f "$REQUEST_FILE" ]; then
+            .venv/bin/python tools/criativos_anuncios/auto_site.py --url "$SOURCE_URL" \
+              --output-dir ad-output --id "site-preview-${{ github.run_id }}" \
+              --source-request "$REQUEST_FILE"
+          else
+            .venv/bin/python tools/criativos_anuncios/auto_site.py --url "$SOURCE_URL" \
+              --output-dir ad-output --id "site-preview-${{ github.run_id }}"
+          fi
           test -s ad-output/auto_request.json
           test -s ad-output/site_capture.json
           test -s ad-output/work/scene_01.png

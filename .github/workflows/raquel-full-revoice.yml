@@ -1,0 +1,56 @@
+name: Criativos - regravar Reel Lowcost com Raquel pt-PT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ads/raquel-revoice-requests/*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  revoice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Preparar sintetizador Raquel e FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q edge-tts
+          command -v ffmpeg
+      - name: Ler pedido de regravacao
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(git diff-tree --no-commit-id --name-only --diff-filter=A -r "${{ github.sha }}" | grep '^ads/raquel-revoice-requests/[A-Za-z0-9_-]*\.json$' | head -n 1 || true)"
+          test -s "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+      - name: Sintetizar texto integral com a voz Raquel pt-PT
+        shell: bash
+        env:
+          REQUEST: ${{ steps.req.outputs.file }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python tools/criativos_anuncios/raquel_revoice.py             --request "$REQUEST" --output-dir raquel-output
+          test -s raquel-output/narracao_raquel_ptpt.wav
+          test -s raquel-output/narracao_raquel_ptpt.mp3
+          test -s raquel-output/raquel_timing.json
+      - name: Guardar amostra integral e tempos para video
+        uses: actions/upload-artifact@v4
+        with:
+          name: raquel-voz-integral-lowcost-${{ github.run_id }}
+          path: |
+            raquel-output/narracao_raquel_ptpt.wav
+            raquel-output/narracao_raquel_ptpt.mp3
+            raquel-output/raquel_timing.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error

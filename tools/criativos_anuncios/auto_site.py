@@ -371,6 +371,16 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 x["metrics"]["quality_score"]+
                 (0.04 if x["source"]=="public-detail-page" else 0)),
                 reverse=True)
+            # Private artifact for editorial QA and first-party product-photo compositions.
+            # Only public-page media, never account files or session cookies.
+            raw_dir=output/"raw_candidates"
+            raw_dir.mkdir(parents=True,exist_ok=True)
+            for item in pool[:38]:
+                source_tag="p" if item["source"]=="public-detail-page" else "h"
+                name=(f"F{item['family_index']:02d}-C{item['card_index']:02d}-"
+                      f"{source_tag}-{item['digest'][:12]}.png")
+                (raw_dir/name).write_bytes(item["image"])
+            (output/"brand_logo.png").write_bytes(logo_png)
             make_media_contact_sheet(pool,output)
             from storyboard import build_storyboard, business_brief
             brief=business_brief(meta,pool,target_seconds)

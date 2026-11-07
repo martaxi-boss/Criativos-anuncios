@@ -1,0 +1,35 @@
+name: Criativos - amostra autentica Rui HD em paginas publicas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ads/rui-voice-preview/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  rui_voice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare public browser
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q playwright
+          .venv/bin/python -m playwright install chromium
+      - name: Inspect only publicly playable genuine Rui audio
+        run: |
+          .venv/bin/python tools/criativos_anuncios/rui_public_voice_preview.py
+          ls -lh rui-public-preview/
+      - name: Deliver legitimate demo and audit status
+        uses: actions/upload-artifact@v4
+        with:
+          name: rui-ptpt-public-voice-demo-${{ github.run_id }}
+          path: rui-public-preview/
+          if-no-files-found: error
+          retention-days: 7

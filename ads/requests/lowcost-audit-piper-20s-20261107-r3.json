@@ -1,0 +1,21 @@
+{
+  "id": "lowcost-audit-piper-20s-20261107-r3",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "target_duration_seconds": 20,
+  "voice_profile": "piper-original-ptpt",
+  "voice_sentences": [
+    "Na Lowcost Europa, descobre tecnologia para estética profissional e conhece melhor os equipamentos disponíveis.",
+    "Explora equipamentos Aqua Peel para cuidados faciais.",
+    "Conhece também os aparelhos HIFU para estética profissional.",
+    "Compara máquinas de depilação a laser.",
+    "Vê equipamentos e preços no site. Escolhe com critério."
+  ],
+  "voice_settings": {
+    "length_scale": 1.17,
+    "intro_pause_s": 0.35,
+    "between_pause_s": 0.46,
+    "outro_pause_s": 1.15
+  },
+  "publish": false,
+  "commercial_release": false
+}

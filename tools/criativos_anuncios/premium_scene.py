@@ -114,8 +114,13 @@ def _save(im: Image.Image) -> bytes:
 
 def product_slide(photo: bytes, logo: bytes, title: str, palette: dict, index: int = 1, brand: str = "") -> bytes:
     """Feature the original photograph at nearly full width; minimal brand overlay."""
-    if not title or not title.strip() or len(title)>220:
-        raise ValueError("Product title absent or excessive; no fabricated labels")
+    title=" ".join(str(title or "").split())
+    if not title:
+        raise ValueError("Verified product name absent; no invented label")
+    # Marketplace offers can expose very long names; crop the visible label,
+    # not the product photograph or the factual source preserved in the brief.
+    if len(title)>145:
+        title=title[:142].rsplit(" ",1)[0].strip()+"…"
     dark=_color(palette.get("dark"),GREEN)
     base=_color(palette.get("bg"),BG)
     accent=_color(palette.get("accent"),"#164F42")

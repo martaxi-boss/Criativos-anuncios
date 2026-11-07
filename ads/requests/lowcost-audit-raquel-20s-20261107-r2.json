@@ -1,0 +1,15 @@
+{
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "target_duration_seconds": 20,
+  "publish": false,
+  "commercial_release": false,
+  "id": "lowcost-audit-raquel-20s-20261107-r2",
+  "voice_profile": "raquel-neural-ptpt",
+  "voice_sentences": [
+    "Lowcost Europa: tecnologia para estética.",
+    "Explora equipamentos Aqua Peel.",
+    "Conhece os aparelhos HIFU.",
+    "Compara opções de depilação a laser.",
+    "Consulta equipamentos e preços."
+  ]
+}

@@ -4,6 +4,20 @@ Motor reutilizável de produção de anúncios verticais em português de Portug
 
 **Fluxo:** pedido JSON com fotografias autorizadas, texto e música → voz Piper pt-PT → FFmpeg → sincronização automática das cenas com a locução → verificações de áudio e imagens → MP4 e relatório privado via GitHub Actions.
 
+## Automação só com URL — sem fotografias manuais
+
+Uma única ordem com o endereço do site público pode iniciar a pré-visualização privada. Exemplo: criar um ficheiro novo em `ads/requests/` com o seguinte conteúdo:
+
+```json
+{"id":"meu-site-001","source_url":"https://example.com/","publish":false,"commercial_release":false}
+```
+
+A GitHub Action existente recolhe as páginas reais com Chromium/Playwright, grava capturas de secções distintas e produz MP4, WAV, relatório e pré-visualização com a voz **Piper pt_PT-tugão-medium**. Esse é o mesmo modelo de voz usado na demonstração aprovada do proprietário. Não é uma voz humana gravada; cada locução nova deve ser ouvida antes de ser aceite para publicidade. Nenhuma fotografia precisa de ser fornecida manualmente se a página pública for acessível.
+
+O resultado é **preview_only**. Capturas da página não são automaticamente um filme profissional aprovado. A locução pode alterar a duração do vídeo; não acelerar artificialmente para cumprir 20 segundos. Sem música licenciada, a prévia automática entrega apenas voz.
+
+O modo automático não faz login nem contorna bloqueios de redes sociais. Reels protegidos ou vídeos sem media original publicamente acessível e autorizado **não estão suportados só com um URL**; o sistema comunica esta limitação em vez de inventar cenas. Os projetos continuam independentes: este workflow executa apenas no próprio repositório GitHub, sem instalações na VPS Ferrari e sem alterar o website.
+
 ## Uso
 
 1. Abrir a Skill **criativos-anuncios** no ChatGPT e dar uma ordem com os visuais na sequência pretendida.

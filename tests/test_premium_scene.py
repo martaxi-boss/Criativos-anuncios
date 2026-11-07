@@ -83,6 +83,24 @@ class PremiumScenes(unittest.TestCase):
         self.assertIn('premium_product_photography',source)
         self.assertNotIn('from editorial_scene import compose_product',source)
 
+    def test_real_photo_shortlist_exports_image_and_ids(self):
+        import tempfile,json
+        raw=photo_bytes()
+        sample=[]
+        for index in range(3):
+            sample.append({"family_index":index,"card_index":index,"source":"public-detail-page",
+                           "image":raw,"name":"Categoria exemplo "+str(index),
+                           "digest":"abc"+str(index),
+                           "metrics":p.quality_metrics(raw,900,650)})
+        with tempfile.TemporaryDirectory() as d:
+            output=Path(d)
+            a.make_media_contact_sheet(sample,output)
+            self.assertTrue((output/"media_candidates.jpg").is_file())
+            indexed=json.loads((output/"media_candidates.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(indexed),3)
+            self.assertEqual(indexed[0]["family_index"],0)
+            self.assertEqual(indexed[1]["source"],"public-detail-page")
+
     def test_does_not_allow_missing_source_photo(self):
         with self.assertRaises(ValueError):
             p.product_slide(b"bad",logo_bytes(),"Real equipment",{},1)

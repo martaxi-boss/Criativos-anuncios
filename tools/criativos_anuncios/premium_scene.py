@@ -158,7 +158,7 @@ def end_slide(logo: bytes, palette: dict, domain: str) -> bytes:
     d.text((81,724),"ESCOLHAS COM",font=_font(56,True),fill="#FFFFFF")
     d.text((81,808),"CRITÉRIO.",font=_font(73,True),fill=GOLD)
     d.rounded_rectangle((85,1017,779,1146),radius=24,fill="#F0D3A4")
-    d.text((124,1057),"VER EQUIPAMENTOS",font=_font(37,True),fill=dark)
+    d.text((122,1056),"VER EQUIPAMENTOS E PREÇOS",font=_font(27,True),fill=dark)
     if domain and len(domain)<=54 and re.fullmatch(r"[a-zA-Z0-9.-]+",domain):
         d.text((111,1310),domain,font=_font(32),fill="#FFFFFF")
     return _save(cv)

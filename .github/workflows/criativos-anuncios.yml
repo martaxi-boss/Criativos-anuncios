@@ -109,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${AUTO_SOURCE:-0}" = "1" ]; then
-            .venv/bin/python tools/criativos_anuncios/render.py               --request "$REQUEST_FILE" --output-dir ad-output --cached-assets
+            .venv/bin/python tools/criativos_anuncios/render.py               --request ad-output/auto_request.json --output-dir ad-output --cached-assets
           else
             .venv/bin/python tools/criativos_anuncios/render.py               --request "$REQUEST_FILE" --output-dir ad-output
           fi

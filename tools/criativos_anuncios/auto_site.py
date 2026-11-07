@@ -372,7 +372,11 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 (0.04 if x["source"]=="public-detail-page" else 0)),
                 reverse=True)
             make_media_contact_sheet(pool,output)
-            from storyboard import build_storyboard
+            from storyboard import build_storyboard, business_brief
+            brief=business_brief(meta,pool,target_seconds)
+            (output/"business_brief.json").write_text(
+                json.dumps(brief,ensure_ascii=False,indent=2)+"\n",encoding="utf-8"
+            )
             copy, shots, alignment=build_storyboard(
                 pool, meta, target_seconds, voice_sentences, preferred_photos
             )
@@ -460,6 +464,8 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 "lead":meta.get("lead"),"h2":meta.get("h2"),"description":meta.get("description"),
                 "palette":meta["palette"],"cta":meta["cta"],
                 "editorial":editorial,
+                "business_brief":"business_brief.json",
+                "copywriting_origin":alignment["script_origin"],
                 "screenshots":[{"name":f"scene_{i+1:02d}.png","scroll_y":pos}
                                for i,(_,__,pos) in enumerate(candidates[:number])],
                 "source_rights":"owner review required",

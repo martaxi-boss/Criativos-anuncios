@@ -284,12 +284,12 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
             photos = [x["image"] for x in products]
             palette=meta["palette"]
             domain=(urlsplit(url).hostname or "")
-            scenes = [intro_slide(photos,logo_png,palette)]
+            scenes = [intro_slide(photos,logo_png,palette,meta.get("h1") or meta["title"])]
             scenes.extend(
-                product_slide(x["image"],logo_png,x["name"],palette,i)
+                product_slide(x["image"],logo_png,x["name"],palette,i,meta.get("brand") or meta["title"])
                 for i,x in enumerate(products,start=1)
             )
-            scenes.append(end_slide(logo_png,palette,domain))
+            scenes.append(end_slide(logo_png,palette,domain,meta.get("h1") or meta["title"],meta.get("cta") or ""))
             candidates=[]
             for n,png in enumerate(scenes):
                 im=Image.open(__import__("io").BytesIO(png)).convert("RGB")

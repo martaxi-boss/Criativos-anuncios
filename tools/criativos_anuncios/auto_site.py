@@ -140,6 +140,9 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
             if (urlsplit(page.url).hostname or "").lower() != source_host:
                 raise RuntimeError("Website redirected to a different host")
             await page.evaluate("document.fonts.ready")
+            # Hide floating chat UI only in advertisement captures; do not edit the site.
+            # It otherwise obscures the actual product image/observed price.
+            await page.add_style_tag(content=".whatsapp-float { visibility: hidden !important; }")
             await page.wait_for_timeout(1200)
             body = await page.locator("body").inner_text(timeout=10000)
             is_social = any(source_host == h or source_host.endswith("." + h) for h in SOCIAL_HOSTS)

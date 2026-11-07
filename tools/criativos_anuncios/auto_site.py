@@ -137,7 +137,7 @@ def make_media_contact_sheet(pool: list[dict], output: Path) -> None:
     )
 
 
-async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None, target_seconds: int = 20, voice_settings: dict | None = None) -> dict:
+async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None, target_seconds: int = 20, voice_settings: dict | None = None, voice_profile: str | None = None) -> dict:
     from datetime import datetime, timezone
     from PIL import Image, ImageChops, ImageStat
     from playwright.async_api import async_playwright
@@ -433,6 +433,16 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 with Image.open(dest) as im:
                     im.verify()
             request=captured_request(meta,len(copy),stem,copy,target_seconds)
+            # The text/visual editor stays unchanged; only the approved voice
+            # is selected. Never infer Raquel from gender or guess Rui HD.
+            if voice_profile is not None:
+                profiles={"piper-original-ptpt":"pt_PT-tugao-medium",
+                          "raquel-neural-ptpt":"pt-PT-RaquelNeural"}
+                if voice_profile not in profiles:
+                    raise ValueError("Unapproved narration voice profile")
+                request["voice"]["profile"]=voice_profile
+                request["voice"]["model"]=profiles[voice_profile]
+                request["source_capture"]["voice_style"]=voice_profile
             if voice_settings is not None:
                 import math
                 if not isinstance(voice_settings,dict):
@@ -490,7 +500,7 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 "screenshots":[{"name":f"scene_{i+1:02d}.png","scroll_y":pos}
                                for i,(_,__,pos) in enumerate(candidates)],
                 "source_rights":"owner review required",
-                "narration":"existing approved pt_PT-tugao-medium model; generated text requires approval",
+                "narration":"approved voice "+request["voice"].get("model","pt_PT-tugao-medium")+"; generated text requires approval",
                 "approval_state":"preview_only"
             }
             (output/"site_capture.json").write_text(
@@ -516,6 +526,7 @@ def main() -> None:
     preferred=None
     target_seconds=20
     voice_settings=None
+    voice_choice=None
     if args.source_request:
         data=json.loads(args.source_request.read_text(encoding="utf-8"))
         if data.get("source_url") != args.url:
@@ -524,9 +535,10 @@ def main() -> None:
         preferred=data.get("preferred_photos")
         target_seconds=data.get("target_duration_seconds",20)
         voice_settings=data.get("voice_settings")
+        voice_choice=data.get("voice_profile")
     result=asyncio.run(capture(
         args.url,args.output_dir,args.id,args.max_scenes,
-        sentences,preferred,target_seconds,voice_settings
+        sentences,preferred,target_seconds,voice_settings,voice_choice
     ))
     print(json.dumps(result,ensure_ascii=False))
 

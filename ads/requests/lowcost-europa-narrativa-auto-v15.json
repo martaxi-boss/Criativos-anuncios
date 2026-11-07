@@ -1,0 +1,9 @@
+{
+  "id": "lowcost-europa-narrativa-auto-v15",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "target_duration_seconds": 20,
+  "creative_mode": "assistant_writes_full_source_based_narrative",
+  "voice_preference": "approved-piper-pt-PT-tugao-medium",
+  "publish": false,
+  "commercial_release": false
+}

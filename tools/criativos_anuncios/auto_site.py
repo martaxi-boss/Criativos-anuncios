@@ -47,6 +47,8 @@ def sentence(text: str, max_words: int = 15) -> str:
 def make_voice_lines(meta: dict) -> list[str]:
     """Use only words demonstrably found on the page, plus a fixed source-neutral CTA."""
     raw = [meta.get("h1"), meta.get("lead"), meta.get("h2"), meta.get("description")]
+    if not any(sentence(value,13) for value in raw):
+        raise RuntimeError("Public page lacks genuine promotional copy")
     raw = [sentence(t, 13) for t in raw if sentence(t, 13)]
     dedup = []
     for s in raw:

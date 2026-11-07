@@ -24,14 +24,14 @@ async def main():
     if any(x["name"]==voice for x in portuguese):
         file=directory/"Raquel_Neural_ptPT_Exemplo_LowCost.mp3"
         await edge_tts.Communicate(TEXT,voice,rate="-8%",pitch="+0Hz").save(str(file))
-        check=subprocess.run(
-            ["ffprobe","-v","error","-show_entries","format=duration",
-             "-of","default=noprint_wrappers=1:nokey=1",str(file)],
-            capture_output=True,text=True)
-        if check.returncode or not file.exists() or file.stat().st_size<8000:
+        from mutagen.mp3 import MP3
+        if not file.exists() or file.stat().st_size<8000:
             raise ValueError("Invalid Raquel voice sample")
+        seconds=float(MP3(file).info.length)
+        if not 3<seconds<120:
+            raise ValueError("Unexpected Raquel sample duration")
         result["samples"].append({"model":voice,"file":file.name,
-                                  "duration":float(check.stdout.strip()),"bytes":file.stat().st_size})
+                                  "duration":round(seconds,2),"bytes":file.stat().st_size})
         print("RAQUEL_REAL_MP3_PASS",file.stat().st_size,flush=True)
     else:
         print("RAQUEL_NOT_IN_EDGE_CATALOG",flush=True)

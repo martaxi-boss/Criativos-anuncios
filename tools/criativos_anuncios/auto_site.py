@@ -60,8 +60,8 @@ def make_voice_lines(meta: dict) -> list[str]:
     if len(real) < 2:
         raise RuntimeError("Not enough independent website statements")
     lines = [f"Descobre {brand} e explora as opções disponíveis no site."]
-    lines += real[:3]
-    lines.append(f"Visita {brand} e conhece todos os detalhes.")
+    lines += [sentence(x,9) for x in real[:3]]
+    lines.append(f"Visita {brand} e conhece a seleção.")
     return lines[:5]
 
 
@@ -70,8 +70,10 @@ def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[st
     if (not isinstance(lines, list) or not 2 <= len(lines) <= 6
             or not all(isinstance(t, str) and 4 <= len(t.strip()) <= 170 for t in lines)):
         raise ValueError("Requested voice sentences must be 2-6 short natural pt-PT phrases")
-    # Each scene is tied to one sentence, with no synthetic imagery.
+    # Readable marketing voice; never squeeze an excessive script into 20 seconds.
     lines = lines[:count]
+    if len(" ".join(lines).split()) > 52:
+        raise ValueError("20-second voice script is too dense; shorten copy instead of accelerating speech")
     count = len(lines)
     if count < 2:
         raise RuntimeError("Insufficient scenes for automatic narration")
@@ -85,9 +87,11 @@ def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[st
             "captured_at": meta["captured_at"],
             "source_verified": True, "editorial_approval": "pending",
             "visuals": "public-page-viewport-screenshots", "voice_style": "approved-piper-pt-PT",
+            "pace": "relaxed",
         },
         "voice": {"model": "pt_PT-tugao-medium", "sentences": lines,
-                  "intro_pause_s": 0.2, "between_pause_s": 0.15, "outro_pause_s": 0.35},
+                  "intro_pause_s": 0.35, "between_pause_s": 0.4, "outro_pause_s": 1.05,
+                  "length_scale": 1.12},
         "scenes": [{"capture_index": i+1, "voice_range": [i, i+1]}
                    for i in range(count)],
         # Voice-only preview until music rights and the owner approve the soundtrack.

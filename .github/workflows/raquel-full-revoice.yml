@@ -23,8 +23,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check --no-input -q edge-tts
-          command -v ffmpeg
+          .venv/bin/pip install --disable-pip-version-check --no-input -q edge-tts imageio-ffmpeg
+          .venv/bin/python -c "import edge_tts, imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
       - name: Ler pedido de regravacao
         id: req
         shell: bash

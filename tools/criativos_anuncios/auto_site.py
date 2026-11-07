@@ -45,28 +45,31 @@ def sentence(text: str, max_words: int = 15) -> str:
 
 
 def make_voice_lines(meta: dict) -> list[str]:
-    """Use only words demonstrably found on the page, plus a fixed source-neutral CTA."""
+    """Produce a factual, conversational preview; source headings remain immutable."""
     raw = [meta.get("h1"), meta.get("lead"), meta.get("h2"), meta.get("description")]
-    if not any(sentence(value,13) for value in raw):
+    if not any(sentence(x, 12) for x in raw):
         raise RuntimeError("Public page lacks genuine promotional copy")
-    raw = [sentence(t, 13) for t in raw if sentence(t, 13)]
-    dedup = []
-    for s in raw:
-        if s.casefold() not in {x.casefold() for x in dedup}:
-            dedup.append(s)
-    brand = sentence(meta.get("brand") or meta.get("title") or "Explora", 6).strip(".")
-    cta = sentence(meta.get("cta") or "Conheça as opções", 8)
-    lines = ([brand + "."] if brand.casefold() not in {x.strip(".").casefold() for x in dedup} else [])
-    lines += dedup[:3]
-    lines += [cta]
-    # At least 2 genuine distinct spoken statements must be present.
-    if len(lines) < 2:
-        raise RuntimeError("Not enough public page copy for a truthful voice script")
+    brand = sentence(meta.get("brand") or meta.get("title") or "", 6).rstrip(".")
+    if not brand:
+        raise RuntimeError("Brand name missing from public page")
+    real = []
+    for part in raw:
+        value = sentence(part, 14)
+        if value and value.casefold() not in {a.casefold() for a in real}:
+            real.append(value)
+    if len(real) < 2:
+        raise RuntimeError("Not enough independent website statements")
+    lines = [f"Descobre {brand} e explora as opções disponíveis no site."]
+    lines += real[:3]
+    lines.append(f"Visita {brand} e conhece todos os detalhes.")
     return lines[:5]
 
 
-def captured_request(meta: dict, count: int, stem: str) -> dict:
-    lines = make_voice_lines(meta)
+def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[str] | None = None) -> dict:
+    lines = make_voice_lines(meta) if voice_sentences is None else voice_sentences
+    if (not isinstance(lines, list) or not 2 <= len(lines) <= 6
+            or not all(isinstance(t, str) and 4 <= len(t.strip()) <= 170 for t in lines)):
+        raise ValueError("Requested voice sentences must be 2-6 short natural pt-PT phrases")
     # Each scene is tied to one sentence, with no synthetic imagery.
     lines = lines[:count]
     count = len(lines)
@@ -92,7 +95,7 @@ def captured_request(meta: dict, count: int, stem: str) -> dict:
     }
 
 
-async def capture(url: str, output: Path, stem: str, max_scenes: int = 5) -> dict:
+async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None) -> dict:
     from datetime import datetime, timezone
     from PIL import Image, ImageChops, ImageStat
     from playwright.async_api import async_playwright
@@ -152,16 +155,19 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5) -> dic
                 const text = el => (el?.innerText || el?.textContent || '').trim();
                 const val = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
                 const first = selector => text(document.querySelector(selector));
-                const link = [...document.querySelectorAll('main a, main button')]
-                    .find(el => /ver|explorar|conhecer|comprar|consultar|pesquisar|preços|opções/i.test(text(el)));
+                const anchors = [...document.querySelectorAll('main a, main button')];
+                const link = anchors.find(el => /ver equipamentos|ver produtos|ver opções|ver precos|ver preços/i.test(text(el))) ||
+                    anchors.find(el => /explorar|conhecer|comprar|consultar|pesquisar|preços|opções/i.test(text(el)));
+                const paragraphs = [...document.querySelectorAll('main p')].map(text)
+                    .filter(t => t.length >= 40 && t.length < 700);
                 return {
                   title: document.title.slice(0,160),
                   brand: first('header .brand, header .logo, header [class*=brand], header img[alt]') ||
                       document.title.split(/[|–-]/)[0].trim(),
                   h1: first('main h1') || first('h1'),
-                  lead: first('main .hero-lead p, main .hero p, main p'),
+                  lead: paragraphs[0] || first('main .hero p'),
                   h2: first('main h2'),
-                  description: first('meta[name=description]') || first('main section p:nth-of-type(2)'),
+                  description: paragraphs.find(t => t !== paragraphs[0]) || first('main section p:nth-of-type(2)'),
                   cta: text(link),
                   palette: {bg: val('--bg'), accent: val('--accent'), dark: val('--dark')},
                   height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
@@ -174,7 +180,8 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5) -> dic
             # same-host links from the page to obtain distinct sections.
             full_height = int(meta["height"])
             viewport_height = 768
-            offsets = [round((full_height-viewport_height)*i/max(1,max_scenes-1))
+            # Prioritize hero, categories and product areas. Avoid the footer.
+            offsets = [round(max(0, full_height-viewport_height)*(.64*i/max(1,max_scenes-1)))
                        for i in range(max_scenes)]
             candidates = []
             for pos in offsets:
@@ -200,13 +207,14 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5) -> dic
                 dest.write_bytes(png)
                 with Image.open(dest) as im:
                     im.verify()
-            request = captured_request(meta,number,stem)
+            request = captured_request(meta,number,stem,voice_sentences)
             (output/"auto_request.json").write_text(
                 json.dumps(request,indent=2,ensure_ascii=False)+"\n",encoding="utf-8"
             )
             manifest = {
                 "source_url":url, "captured_at":meta["captured_at"],
                 "title":meta["title"],"brand":meta["brand"],"h1":meta["h1"],
+                "lead":meta.get("lead"),"h2":meta.get("h2"),"description":meta.get("description"),
                 "palette":meta["palette"],"cta":meta["cta"],
                 "screenshots":[{"name":f"scene_{i+1:02d}.png","scroll_y":pos}
                                for i,(_,__,pos) in enumerate(candidates[:number])],
@@ -228,10 +236,18 @@ def main() -> None:
     parser.add_argument("--output-dir",type=Path,required=True)
     parser.add_argument("--id",default="site-automatic-preview")
     parser.add_argument("--max-scenes",type=int,default=5,choices=range(2,7),metavar="2..6")
+    parser.add_argument("--source-request",type=Path,
+                        help="Optional public JSON request with ChatGPT-authored verified voice_sentences")
     args=parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,60}",args.id):
         parser.error("Invalid identifier")
-    result=asyncio.run(capture(args.url,args.output_dir,args.id,args.max_scenes))
+    sentences=None
+    if args.source_request:
+        data=json.loads(args.source_request.read_text(encoding="utf-8"))
+        if data.get("source_url") != args.url:
+            raise ValueError("Original request URL does not match captured URL")
+        sentences=data.get("voice_sentences")
+    result=asyncio.run(capture(args.url,args.output_dir,args.id,args.max_scenes,sentences))
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=="__main__":

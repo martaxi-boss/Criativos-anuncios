@@ -90,8 +90,8 @@ def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[st
             "pace": "relaxed",
         },
         "voice": {"model": "pt_PT-tugao-medium", "sentences": lines,
-                  "intro_pause_s": 0.35, "between_pause_s": 0.4, "outro_pause_s": 1.05,
-                  "length_scale": 1.12},
+                  "intro_pause_s": 0.35, "between_pause_s": 0.46, "outro_pause_s": 1.15,
+                  "length_scale": 1.17},
         "scenes": [{"capture_index": i+1, "voice_range": [i, i+1]}
                    for i in range(count)],
         # Voice-only preview until music rights and the owner approve the soundtrack.

@@ -306,6 +306,7 @@ def scene_boundaries_for_speech(
         scene_boundaries.append(total)
     if not all(b>a+0.6 for a,b in zip(scene_boundaries,scene_boundaries[1:])):
         raise ValueError("Too many visual scenes for actual spoken clip duration")
+    return scene_boundaries
 
 
 def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: Path, starts: list[float], total: float, media: Path, output: Path, *, fps: int = 25) -> list[float]:

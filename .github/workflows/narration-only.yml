@@ -1,0 +1,75 @@
+name: Criativos - narracao explicativa pt-PT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ads/narration-requests/*.json"
+  workflow_dispatch:
+    inputs:
+      request_file:
+        description: "Pedido de locucao em ads/narration-requests"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  narration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Preparar voz Piper portuguesa
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q piper-tts pillow
+      - name: Selecionar pedido novo
+        id: req
+        shell: bash
+        env:
+          DISPATCH_FILE: ${{ inputs.request_file }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REQUEST="$DISPATCH_FILE"
+          else
+            REQUEST="$(git diff-tree --no-commit-id --name-only --diff-filter=A -r "${{ github.sha }}" | grep '^ads/narration-requests/[A-Za-z0-9_-]*\.json$' | head -n 1 || true)"
+          fi
+          case "$REQUEST" in
+            ads/narration-requests/*.json) ;;
+            *) echo "No new narration request" >&2; exit 1 ;;
+          esac
+          test -s "$REQUEST"
+          echo "file=$REQUEST" >> "$GITHUB_OUTPUT"
+      - name: Gerar WAV e marcar inicio de cada paragrafo
+        shell: bash
+        env:
+          REQUEST: ${{ steps.req.outputs.file }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python tools/criativos_anuncios/narration_only.py --request "$REQUEST" --output-dir narration-output
+          test -s narration-output/narracao_ptpt.wav
+          test -s narration-output/report.json
+          .venv/bin/python - <<'PY'
+          import json
+          m=json.load(open('narration-output/report.json',encoding='utf-8'))
+          assert m['status']=='preview_only' and m['duration_seconds']>=30
+          assert m['spoken_words'] >= 65
+          print("VALIDATED",m['id'],m['duration_seconds'])
+          PY
+      - name: Entregar WAV + guiao e duracoes sem publicar
+        uses: actions/upload-artifact@v4
+        with:
+          name: locucao-ptpt-explicativa-${{ github.run_id }}
+          path: |
+            narration-output/narracao_ptpt.wav
+            narration-output/report.json
+          if-no-files-found: error
+          retention-days: 7

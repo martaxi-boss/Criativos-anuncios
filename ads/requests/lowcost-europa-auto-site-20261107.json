@@ -1,0 +1,10 @@
+{
+  "id": "lowcost-europa-auto-site-20261107",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "source_kind": "public_website",
+  "voice_preference": "approved-piper-pt-PT-tugao-medium",
+  "target_duration_seconds": 20,
+  "publish": false,
+  "commercial_release": false,
+  "notes": "Private QA: screenshots directly from public site, no manually supplied images. Await user visual and audio approval."
+}

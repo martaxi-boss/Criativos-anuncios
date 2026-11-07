@@ -1,0 +1,16 @@
+{
+  "id": "lowcost-europa-auto-site-20261107-v4",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "source_kind": "public_website",
+  "voice_preference": "approved-piper-pt-PT-tugao-medium",
+  "voice_sentences": [
+    "À procura de equipamentos de estética profissional? Descobre a Lowcost Europa.",
+    "Tecnologia para a estética. Escolhas com critério.",
+    "Explora equipamentos por categoria e consulta os preços observados.",
+    "Compara opções e confirma compra e envio diretamente com os parceiros.",
+    "Visita o site e conhece os produtos disponíveis."
+  ],
+  "target_duration_seconds": 20,
+  "publish": false,
+  "commercial_release": false
+}

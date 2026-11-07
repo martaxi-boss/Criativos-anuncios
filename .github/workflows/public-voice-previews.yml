@@ -1,0 +1,35 @@
+name: Criativos - amostras publicas Rui e Raquel para audicao
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ads/public-voice-previews/*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  samples:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Browser public sample inspection
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --no-input -q playwright
+          .venv/bin/python -m playwright install chromium
+      - name: Fetch playable public sample; inspect Rui site
+        run: |
+          .venv/bin/python tools/criativos_anuncios/public_voice_previews.py
+          ls -lh public-voice-previews/
+      - name: Upload only legitimate public voice previews and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: amostras-ptpt-Rui-Raquel-${{ github.run_id }}
+          path: public-voice-previews/
+          if-no-files-found: error
+          retention-days: 7

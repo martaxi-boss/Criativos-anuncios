@@ -35,12 +35,13 @@ def relevance(voice_text: str, item_name: str) -> float:
 def _photo_identity(x:dict) -> tuple:
     return (x["family_index"],x["card_index"],x["source"],x["digest"])
 
-def _choose(pool:list[dict], used:set[tuple], required_words:set[str] | None=None) -> dict:
+def _choose(pool:list[dict], used:set[tuple], required_words:set[str] | None=None, voice_text:str="") -> dict:
     def rank(x):
         base=x["metrics"].get("quality_score",0)
         scope=.04 if x["source"]=="public-detail-page" else 0
         hit=len(required_words.intersection(words(x["name"]))) if required_words else 0
-        return 2.5*hit + base + scope
+        semantic=len(words(voice_text).intersection(words(x["name"])))
+        return 2.5*hit + 1.5*semantic + base + scope
     choices=[p for p in pool if _photo_identity(p) not in used]
     if required_words:
         choices=[p for p in choices if words(p["name"]).intersection(required_words)]
@@ -138,9 +139,14 @@ def build_storyboard(
     for index,line in enumerate(lines[1:-1],start=1):
         requested=words(line)
         category_terms=requested.intersection(_CATEGORY_WORDS)
-        # Exact product/category words from the script drive the photograph
-        # selection. Visual quality is only the tie-breaker.
-        photo=_choose(ordered,used,category_terms or None)
+        # In full automation, first curate the real product photograph, then
+        # write that exact category into the spoken line. If the user supplies
+        # narration, match its wording to genuine source categories.
+        if voice_sentences is None:
+            photo=ordered[index-1]
+            used.add(_photo_identity(photo))
+        else:
+            photo=_choose(ordered,used,category_terms or None,voice_text=line)
         shot={"kind":"product","voice_index":index,"caption":photo["name"],
               "spoken_text":line,"photo":photo,
               "matching":round(relevance(line,photo["name"]),3)}

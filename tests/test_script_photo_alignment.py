@@ -61,7 +61,11 @@ class NarrativePhotoSync(unittest.TestCase):
         self.assertEqual(boundaries[-1],duration)
         self.assertTrue(all(b>a+.6 for a,b in zip(boundaries,boundaries[1:])))
         for shot,start in zip(shots,boundaries):
-            self.assertLessEqual(start,starts[shot["voice_index"]]+.001 if shot["voice_index"]>0 else starts[0])
+            index=shot["voice_index"]
+            lower=0 if index==0 else starts[index]
+            upper=starts[index+1] if index+1<len(starts) else duration
+            self.assertGreaterEqual(start,lower-.001)
+            self.assertLess(start,upper+.001)
         self.assertEqual(report["visual_shots"],len(shots))
         return report
     def test_20_second_ad_can_show_more_than_three_photos(self):

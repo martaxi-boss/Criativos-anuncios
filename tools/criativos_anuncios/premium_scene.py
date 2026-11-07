@@ -112,7 +112,7 @@ def _save(im: Image.Image) -> bytes:
     im.save(buf,"PNG",optimize=True)
     return buf.getvalue()
 
-def product_slide(photo: bytes, logo: bytes, title: str, palette: dict, index: int = 1) -> bytes:
+def product_slide(photo: bytes, logo: bytes, title: str, palette: dict, index: int = 1, brand: str = "") -> bytes:
     """Feature the original photograph at nearly full width; minimal brand overlay."""
     if not title or not title.strip() or len(title)>220:
         raise ValueError("Product title absent or excessive; no fabricated labels")
@@ -124,7 +124,7 @@ def product_slide(photo: bytes, logo: bytes, title: str, palette: dict, index: i
     d.rectangle((0,0,864,204),fill="#FFFFFF")
     _logo(canvas,logo,(88,24,776,178))
     d.rectangle((0,208,864,218),fill=GOLD)
-    label="EQUIPAMENTOS DE ESTÉTICA"
+    label="EM DESTAQUE"
     d.text((76,274),label,font=_font(28,True),fill=accent,stroke_width=0)
     # Large single product image, no baked website card chrome or buttons.
     d.rounded_rectangle((50,352,814,1132),radius=32,fill="#FFFFFF")
@@ -137,10 +137,11 @@ def product_slide(photo: bytes, logo: bytes, title: str, palette: dict, index: i
         d.text((67,y),line,font=_font(fontsize,True),fill=dark)
         y+=fontsize+13
     d.rectangle((0,1450,864,1536),fill=accent)
-    d.text((70,1473),"LOWCOST EUROPA",font=_font(28,True),fill="#FFFFFF")
+    footer=" ".join((brand or "CONHEÇA AS OPÇÕES").upper().split())[:43]
+    d.text((70,1473),footer,font=_font(28,True),fill="#FFFFFF")
     return _save(canvas)
 
-def intro_slide(images: list[bytes], logo: bytes, palette: dict) -> bytes:
+def intro_slide(images: list[bytes], logo: bytes, palette: dict, headline: str = "") -> bytes:
     """Clean opening that presents a three-product selection, never a mobile screenshot."""
     if len(images)<2:
         raise ValueError("At least two real product photos required for an intro")
@@ -150,8 +151,10 @@ def intro_slide(images: list[bytes], logo: bytes, palette: dict) -> bytes:
     d=ImageDraw.Draw(cv)
     d.rectangle((0,0,864,192),fill="#FFFFFF")
     _logo(cv,logo,(80,27,784,168))
-    d.text((61,258),"TECNOLOGIA",font=_font(65,True),fill=dark)
-    d.text((61,342),"PARA A ESTÉTICA",font=_font(51,True),fill=dark)
+    title=" ".join((headline or "CONHEÇA AS OPÇÕES").upper().split())
+    title_font=_font(47,True)
+    for j,line in enumerate(_text_lines(d,title,title_font,740,3)):
+        d.text((61,242+j*65),line,font=title_font,fill=dark)
     d.rounded_rectangle((55,476,808,1252),radius=30,fill="#FFFFFF")
     # Unlike repeating a slide, this layout is a curated product collage.
     boxes=[(79,496,784,896),(82,918,418,1227),(437,918,781,1227)]
@@ -159,10 +162,10 @@ def intro_slide(images: list[bytes], logo: bytes, palette: dict) -> bytes:
     for source,box in zip(products,boxes):
         _product_image(cv,source,box)
     d.rectangle((0,1345,864,1536),fill=dark)
-    d.text((68,1394),"ESCOLHAS COM CRITÉRIO",font=_font(34,True),fill="#FFFFFF")
+    d.text((68,1394),"EXPLORE O CATÁLOGO",font=_font(34,True),fill="#FFFFFF")
     return _save(cv)
 
-def end_slide(logo: bytes, palette: dict, domain: str) -> bytes:
+def end_slide(logo: bytes, palette: dict, domain: str, headline: str = "", cta: str = "") -> bytes:
     """End frame: verified original logo and actual brand CTA."""
     dark=_color(palette.get("dark"),GREEN)
     bg=_color(palette.get("bg"),BG)
@@ -171,10 +174,16 @@ def end_slide(logo: bytes, palette: dict, domain: str) -> bytes:
     d=ImageDraw.Draw(cv)
     d.rounded_rectangle((58,348,806,630),radius=26,fill="#FFFFFF")
     _logo(cv,logo,(86,392,778,588))
-    d.text((81,724),"ESCOLHAS COM",font=_font(56,True),fill="#FFFFFF")
-    d.text((81,808),"CRITÉRIO.",font=_font(73,True),fill=GOLD)
+    txt=" ".join((headline or "CONHEÇA AS OPÇÕES").upper().split())
+    txtfont=_font(49,True)
+    for j,line in enumerate(_text_lines(d,txt,txtfont,715,3)):
+        d.text((81,714+j*72),line,font=txtfont,fill=GOLD if j==1 else "#FFFFFF")
     d.rounded_rectangle((85,1017,779,1146),radius=24,fill="#F0D3A4")
-    d.text((122,1056),"VER EQUIPAMENTOS E PREÇOS",font=_font(27,True),fill=dark)
+    action=" ".join((cta or "CONHECER O SITE").upper().replace("↗","").split())
+    font=_font(28 if len(action)<=25 else 24,True)
+    lines=_text_lines(d,action,font,630,2)
+    for j,line in enumerate(lines):
+        d.text((118,1046+j*34),line,font=font,fill=dark)
     if domain and len(domain)<=54 and re.fullmatch(r"[a-zA-Z0-9.-]+",domain):
         d.text((111,1310),domain,font=_font(32),fill="#FFFFFF")
     return _save(cv)

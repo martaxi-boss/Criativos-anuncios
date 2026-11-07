@@ -1,0 +1,29 @@
+name: Criativos-anuncios - QA fonte URL e voz aprovada
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/criativos_anuncios/**'
+      - 'tests/**'
+      - '.github/workflows/qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar testes minimos de imagem
+        run: python -m pip install --disable-pip-version-check --no-input pillow
+      - name: Verificar contratos e seguranca da captação automatica
+        run: python -m unittest discover -s tests -v
+      - name: Compilar scripts Python
+        run: python -m py_compile tools/criativos_anuncios/render.py tools/criativos_anuncios/auto_site.py

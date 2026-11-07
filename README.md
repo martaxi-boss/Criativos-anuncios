@@ -2,7 +2,19 @@
 
 Motor reutilizável de produção de anúncios verticais em português de Portugal, associado à Skill privada **criativos-anuncios**.
 
-**Fluxo:** pedido JSON com fotografias autorizadas, texto e música → voz Piper pt-PT → FFmpeg → sincronização automática das cenas com a locução → verificações de áudio e imagens → MP4 e relatório privado via GitHub Actions.
+**Fluxo:** o utilizador fornece site, fotografias, vídeo, Reel autorizado, ideia ou uma combinação. A IA anfitriã analisa a fonte, cria o texto e os planos adequados; os programas de execução preparam as imagens, geram voz Piper pt-PT e montam pré-visualizações em FFmpeg. O website é um dos tipos de entrada, não um requisito.
+
+## Entradas universais — website, fotografias, vídeos, Reels e misturas
+
+A criação de anúncios **não depende de URL**. A mesma Skill Ferrari aceita fotografias, vídeo original, captura pública de website, Reel acessível por via autorizada, descrição/ideia e combinações. A IA anfitriã escolhe o conceito, escreve a narração e associa cada frase ao visual certo; não pede ao utilizador um guião.
+
+**Ficheiros privados (fotografias e vídeos):** usar localmente `tools/criativos_anuncios/media_intake.py` com `--input` repetível e `--output-dir` numa pasta privada. Aceita fotos PNG/JPG/WEBP e vídeos MP4/MOV/M4V/WEBM; verifica fontes com Pillow, FFprobe/FFmpeg, cria `intake_manifest.json`, `media_candidates.jpg` e fotogramas `work/scene_NN.png`. O ChatGPT inspeciona os ficheiros, escreve `voice_sentences` e escolhe `shots` a partir dos IDs e hashes. Com `--storyboard`, o módulo produz `render_request.json` e coloca os PNG na ordem necessária para o renderizador usar `--cached-assets`. A validação dos ficheiros não garante, por si só, um anúncio final profissional.
+
+**Vídeo recebido:** o primeiro intake extrai fotogramas e apresenta opções de montagem com voz; ainda não edita excertos contínuos com movimento. Reedição de clips em movimento exige implementação separada e certificação, não pode ser anunciada como funcionalidade já terminada.
+
+**Reels:** se o utilizador anexar o ficheiro original, segue a via de vídeo privado. Um link pode exigir autenticação/acesso autorizado; não contornar login nem prometer download só com URL.
+
+**Privacidade:** manter anexos do utilizador no ambiente autorizado; não colocar fotos ou vídeos privados em repositórios GitHub públicos. O workflow de site continua público apenas para pedidos sem informação pessoal. A publicação de anúncios não é automática.
 
 ## Conceito publicitário, guião e imagens relacionados
 

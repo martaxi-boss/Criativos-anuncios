@@ -65,15 +65,16 @@ def make_voice_lines(meta: dict) -> list[str]:
     return lines[:5]
 
 
-def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[str] | None = None) -> dict:
+def captured_request(meta: dict, count: int, stem: str, voice_sentences: list[str] | None = None, target_seconds: int = 20) -> dict:
     lines = make_voice_lines(meta) if voice_sentences is None else voice_sentences
-    if (not isinstance(lines, list) or not 2 <= len(lines) <= 6
+    if (not isinstance(lines, list) or not 2 <= len(lines) <= 18
             or not all(isinstance(t, str) and 4 <= len(t.strip()) <= 170 for t in lines)):
-        raise ValueError("Requested voice sentences must be 2-6 short natural pt-PT phrases")
-    # Readable marketing voice; never squeeze an excessive script into 20 seconds.
+        raise ValueError("Requested voice sentences must be 2-18 short natural pt-PT phrases")
+    if type(target_seconds) is not int or not 10 <= target_seconds <= 75:
+        raise ValueError("Target ad duration must be 10-75 seconds")
     lines = lines[:count]
-    if len(" ".join(lines).split()) > 52:
-        raise ValueError("20-second voice script is too dense; shorten copy instead of accelerating speech")
+    if len(" ".join(lines).split()) > round(target_seconds*2.65):
+        raise ValueError("Voice script too dense for relaxed speech at requested duration")
     count = len(lines)
     if count < 2:
         raise RuntimeError("Insufficient scenes for automatic narration")
@@ -136,7 +137,7 @@ def make_media_contact_sheet(pool: list[dict], output: Path) -> None:
     )
 
 
-async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None) -> dict:
+async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_sentences: list[str] | None = None, preferred_photos: list[dict] | None = None, target_seconds: int = 20) -> dict:
     from datetime import datetime, timezone
     from PIL import Image, ImageChops, ImageStat
     from playwright.async_api import async_playwright
@@ -371,76 +372,85 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 (0.04 if x["source"]=="public-detail-page" else 0)),
                 reverse=True)
             make_media_contact_sheet(pool,output)
-            if len(pool)<3:
-                raise RuntimeError(
-                    "Premium creative not generated: only "
-                    +str(len(pool))+
-                    " usable product photographs among "
-                    +str(min(await cards.count(),24))+
-                    " cards. Do not substitute cluttered screenshots."
-                )
-            products=[]
-            families=set()
-            if preferred_photos is not None:
-                if (not isinstance(preferred_photos,list) or len(preferred_photos)!=3 or
-                        not all(isinstance(row,dict) for row in preferred_photos)):
-                    raise ValueError("preferred_photos must be exactly 3 verified source ids")
-                for pref in preferred_photos:
-                    matches=[x for x in pool if
-                        x["family_index"]==pref.get("family_index") and
-                        x["card_index"]==pref.get("card_index") and
-                        x["source"]==pref.get("source")]
-                    if len(matches)!=1 or matches[0]["family_index"] in families:
-                        raise ValueError("A curated photo is unavailable, duplicated or unverified")
-                    products.append(matches[0])
-                    families.add(matches[0]["family_index"])
-            else:
-                for candidate in pool:
-                    if candidate["family_index"] not in families:
-                        products.append(candidate)
-                        families.add(candidate["family_index"])
-                    if len(products)==3:
-                        break
-            if len(products)<3:
-                raise RuntimeError("Insufficient distinct genuine product categories for premium creative")
-            photos = [x["image"] for x in products]
+            from storyboard import build_storyboard
+            copy, shots, alignment=build_storyboard(
+                pool, meta, target_seconds, voice_sentences, preferred_photos
+            )
+            chosen=[shot["photo"] for shot in shots if shot["kind"]=="product"]
+            if len(chosen)<2:
+                raise RuntimeError("No authentic product photos aligned with spoken claims")
             palette=meta["palette"]
             domain=(urlsplit(url).hostname or "")
-            scenes = [intro_slide(photos,logo_png,palette,meta.get("h1") or meta["title"])]
-            scenes.extend(
-                product_slide(x["image"],logo_png,x["name"],palette,i,meta.get("brand") or meta["title"])
-                for i,x in enumerate(products,start=1)
-            )
-            scenes.append(end_slide(logo_png,palette,domain,meta.get("h1") or meta["title"],meta.get("cta") or ""))
+            intro_images=[x["image"] for x in chosen[:3]]
+            visual=[]
+            for shot in shots:
+                if shot["kind"]=="intro":
+                    png=intro_slide(intro_images,logo_png,palette,
+                        meta.get("h1") or meta["title"])
+                elif shot["kind"]=="product":
+                    png=product_slide(
+                        shot["photo"]["image"],logo_png,shot["caption"],palette,
+                        len(visual)+1,meta.get("brand") or meta["title"]
+                    )
+                elif shot["kind"]=="end":
+                    png=end_slide(logo_png,palette,domain,
+                        meta.get("h1") or meta["title"],meta.get("cta") or "")
+                else:
+                    raise RuntimeError("Unknown editorial shot")
+                visual.append(png)
             candidates=[]
-            for n,png in enumerate(scenes):
+            alignment_rows=[]
+            for n,(shot,png) in enumerate(zip(shots,visual),start=1):
                 im=Image.open(__import__("io").BytesIO(png)).convert("RGB")
                 candidates.append((im.resize((90,160)),png,-100-n))
-            editorial = {
-                "mode":"premium_product_photography",
-                "product_cards":len(products),
-                "source_elements":["header img.brand-logo",
-                                   "main .product-card__image",
-                                   "main .product-card h3",
-                                   "main a.hero-primary-cta"],
-                "selected":[{"category":x["name"],"card_index":x["card_index"],
-                             "family_index":x["family_index"],"source":x["source"],
-                             "image_sha256":x["digest"],
-                             "quality":x["metrics"]} for x in products],
-                "screening_rejections":rejected,
-                "candidate_count":len(pool), "detail_pages_visited":len(visited),
-                "selection_method":"host_visual_shortlist" if preferred_photos else "automated_quality_score",
-                "quality_gate":"technical_screening_pass_editorial_review_pending"
-            }
-            lines = make_voice_lines(meta)
-            number = min(len(lines),len(candidates))
-            for i,(_,png,_) in enumerate(candidates[:number],start=1):
+                alignment_rows.append({
+                    "shot":n,"kind":shot["kind"],
+                    "voice_index":shot["voice_index"],
+                    "spoken_text":copy[shot["voice_index"]],
+                    "visual_caption":shot["caption"],
+                    "image_sha256":shot.get("photo",{}).get("digest"),
+                    "image_source":shot.get("photo",{}).get("source"),
+                    "category":shot.get("photo",{}).get("name"),
+                    "semantic_match_score":shot.get("matching"),
+                })
+            for i,(_,png,_) in enumerate(candidates,start=1):
                 dest=work/f"scene_{i:02d}.png"
                 dest.write_bytes(png)
                 with Image.open(dest) as im:
                     im.verify()
-            request = captured_request(meta,number,stem,voice_sentences)
-            request["source_capture"]["visuals"] = editorial["mode"]
+            request=captured_request(meta,len(copy),stem,copy,target_seconds)
+            request["scenes"]=[
+                {"capture_index":n+1,
+                 "voice_index":shot["voice_index"],
+                 "visual_caption":shot["caption"]}
+                for n,shot in enumerate(shots)
+            ]
+            request["source_capture"]["visuals"]="premium_product_photography"
+            request["source_capture"]["scene_timing"]="voice_aligned"
+            request["source_capture"]["requested_seconds"]=target_seconds
+            editorial={
+                "mode":"premium_product_photography",
+                "source_elements":["header img.brand-logo",
+                    "main .product-card__image", "main img.offer-card__image",
+                    "main .product-card h3", "main a.hero-primary-cta"],
+                "selected":[
+                    {"shot":entry["shot"],"category":entry["category"],
+                     "source":entry["image_source"],"image_sha256":entry["image_sha256"]}
+                    for entry in alignment_rows if entry["kind"]=="product"
+                ],
+                "screening_rejections":rejected,
+                "candidate_count":len(pool),
+                "detail_pages_visited":len(visited),
+                "storyboard":alignment,
+                "alignment":alignment_rows,
+                "selection_method":"source-grounded-script-alignment",
+                "quality_gate":"technical_screening_pass_editorial_review_pending",
+            }
+            (output/"storyboard.json").write_text(
+                json.dumps({"voice_sentences":copy,"alignment":alignment_rows,
+                            "metrics":alignment},ensure_ascii=False,indent=2)+"\n",
+                encoding="utf-8"
+            )
             (output/"auto_request.json").write_text(
                 json.dumps(request,indent=2,ensure_ascii=False)+"\n",encoding="utf-8"
             )
@@ -477,13 +487,18 @@ def main() -> None:
         parser.error("Invalid identifier")
     sentences=None
     preferred=None
+    target_seconds=20
     if args.source_request:
         data=json.loads(args.source_request.read_text(encoding="utf-8"))
         if data.get("source_url") != args.url:
             raise ValueError("Original request URL does not match captured URL")
         sentences=data.get("voice_sentences")
         preferred=data.get("preferred_photos")
-    result=asyncio.run(capture(args.url,args.output_dir,args.id,args.max_scenes,sentences,preferred))
+        target_seconds=data.get("target_duration_seconds",20)
+    result=asyncio.run(capture(
+        args.url,args.output_dir,args.id,args.max_scenes,
+        sentences,preferred,target_seconds
+    ))
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=="__main__":

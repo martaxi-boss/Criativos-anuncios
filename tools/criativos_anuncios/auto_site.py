@@ -200,6 +200,26 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                 candidates.append((thumb,png,pos))
             if len(candidates)<2:
                 raise RuntimeError("The site did not expose enough distinct real visual scenes")
+            # End with the genuine website CTA rather than its footer, where possible.
+            if len(candidates) >= 4:
+                try:
+                    target = page.locator("main a, main button").filter(
+                        has_text=re.compile(r"ver equipamentos|ver produtos|ver preços|explorar|conhecer",re.I)
+                    ).first
+                    if await target.count():
+                        await target.scroll_into_view_if_needed(timeout=5000)
+                        await page.evaluate("window.scrollBy(0,160)")
+                        await page.wait_for_timeout(350)
+                        cta_png = await page.screenshot(animations="disabled")
+                        cta_thumb = Image.open(__import__("io").BytesIO(cta_png)).convert("RGB").resize((90,160))
+                        distinct = all(
+                            sum(ImageStat.Stat(ImageChops.difference(prev,cta_thumb)).mean)/3 > 8
+                            for prev,_,_ in candidates[:-1]
+                        )
+                        if distinct:
+                            candidates[-1] = (cta_thumb, cta_png, -1)
+                except Exception:
+                    pass  # Retain genuine product page capture on CTA failure.
             lines = make_voice_lines(meta)
             number = min(len(lines),len(candidates))
             for i,(_,png,_) in enumerate(candidates[:number],start=1):

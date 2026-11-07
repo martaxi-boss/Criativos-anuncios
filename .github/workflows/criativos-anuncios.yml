@@ -47,7 +47,7 @@ jobs:
         shell: bash
         env:
           DISPATCH_REQUEST: ${{ inputs.request_file }}
-          SOURCE_URL: ${{ env.AUTO_SOURCE_URL }}
+          SOURCE_URL: ${{ inputs.source_url }}
         run: |
           set -euo pipefail
           if [ -n "$SOURCE_URL" ]; then
@@ -95,7 +95,7 @@ jobs:
         if: ${{ env.AUTO_SOURCE == '1' }}
         shell: bash
         env:
-          SOURCE_URL: ${{ inputs.source_url }}
+          SOURCE_URL: ${{ env.AUTO_SOURCE_URL }}
         run: |
           set -euo pipefail
           .venv/bin/pip install --disable-pip-version-check --no-input -q playwright

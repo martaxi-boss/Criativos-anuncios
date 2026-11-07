@@ -1,0 +1,54 @@
+name: Criativos - captar percurso publico do site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ads/site-flow-requests/*.json"
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Preparar Chromium Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install -q --disable-pip-version-check --no-input playwright pillow
+          .venv/bin/python -m playwright install chromium
+      - name: Selecionar pedido
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(git diff-tree --no-commit-id --name-only --diff-filter=A -r "${{ github.sha }}" | grep '^ads/site-flow-requests/[A-Za-z0-9_-]*\.json$' | head -n 1 || true)"
+          test -s "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+      - name: Capturar homepage, pesquisa, ofertas, vendedor e informacao
+        shell: bash
+        env:
+          REQUEST: ${{ steps.req.outputs.file }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python tools/criativos_anuncios/capture_business_flow.py --request "$REQUEST" --output-dir site-flow
+          test -s site-flow/01_inicio.png
+          test -s site-flow/06_oferta.png
+          test -s site-flow/capture_report.json
+      - name: Entregar capturas reais sem compra
+        uses: actions/upload-artifact@v4
+        with:
+          name: percurso-real-lowcost-${{ github.run_id }}
+          path: |
+            site-flow/*.png
+            site-flow/capture_report.json
+          if-no-files-found: error
+          retention-days: 7

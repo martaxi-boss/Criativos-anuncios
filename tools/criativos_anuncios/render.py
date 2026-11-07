@@ -98,11 +98,19 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
         if not isinstance(scene, dict):
             raise ValueError(f"scene {index} is not an object")
         image_url = scene.get("image_url", "")
-        if not isinstance(image_url, str) or not image_url.startswith("https://"):
-            raise ValueError(f"scene {index} requires a HTTPS image_url")
-        if image_url in sources:
-            raise ValueError(f"scene {index}: image URL duplicated; no accidental missing scenes")
-        sources.add(image_url)
+        captured = scene.get("capture_index")
+        if captured is not None:
+            if (not isinstance(data.get("source_capture"), dict) or
+                    type(captured) is not int or captured != index+1 or image_url):
+                raise ValueError(f"scene {index}: capture_index must match a generated site screenshot")
+            source = ("capture", captured)
+        else:
+            if not isinstance(image_url, str) or not image_url.startswith("https://"):
+                raise ValueError(f"scene {index} requires a HTTPS image_url or verified capture_index")
+            source = ("url", image_url)
+        if source in sources:
+            raise ValueError(f"scene {index}: duplicated media")
+        sources.add(source)
         indices = scene.get("voice_range")
         if not isinstance(indices, list) or len(indices) != 2 or any(type(v) is not int for v in indices):
             raise ValueError(f"scene {index}: voice_range must be [from, to]")
@@ -112,13 +120,17 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
         consumed = end
     if consumed != len(text):
         raise ValueError("The final scene must cover the final voice sentence")
-    music = data.get("music", {})
-    if not isinstance(music, dict) or not isinstance(music.get("url", None), str):
-        raise ValueError("A music source URL is required; no unapproved music substitution")
-    if not music["url"].startswith("https://"):
-        raise ValueError("A HTTPS music URL is required")
-    if not isinstance(music.get("provenance", ""), str) or not music.get("provenance"):
-        raise ValueError("Music provenance/licensing note required")
+    music = data.get("music")
+    if music is None:
+        if not isinstance(data.get("source_capture"), dict):
+            raise ValueError("Music source required for manually supplied adverts")
+    else:
+        if not isinstance(music, dict) or not isinstance(music.get("url"), str):
+            raise ValueError("Valid music metadata required")
+        if not music["url"].startswith("https://"):
+            raise ValueError("A HTTPS music URL is required")
+        if not isinstance(music.get("provenance", ""), str) or not music.get("provenance"):
+            raise ValueError("Music provenance/licensing note required")
     if data.get("commercial_release") is not False:
         raise ValueError("Only private commercial_release=false test outputs are supported")
     return scenes, text, task_id
@@ -137,19 +149,23 @@ def prepare_assets(data: dict, media: Path, *, cached: bool) -> list[Path]:
     photos=[]
     for n,scene in enumerate(scenes, start=1):
         dest=media/f"scene_{n:02d}.png"
-        if not cached or not dest.is_file():
+        if scene.get("capture_index") is not None:
+            if not cached or not dest.is_file() or dest.is_symlink():
+                raise ValueError("Missing verified site screenshot in private output folder")
+        elif not cached or not dest.is_file():
             retrieve(scene["image_url"], dest, max_bytes=15 * 1024 * 1024)
         verify_image(dest)
         photos.append(dest)
     digests=[hashlib.sha256(p.read_bytes()).hexdigest() for p in photos]
     if len(set(digests)) != len(digests):
         raise ValueError("Source photographs must all be distinct")
-    music=media/"music_source.bin"
-    if not cached or not music.is_file():
-        retrieve(data["music"]["url"], music, max_bytes=MAX_MEDIA)
-    probe=json.loads(run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(music)]))
-    if not any(s.get("codec_type")=="audio" for s in probe["streams"]):
-        raise ValueError("Music source does not contain an audio stream")
+    if data.get("music") is not None:
+        music=media/"music_source.bin"
+        if not cached or not music.is_file():
+            retrieve(data["music"]["url"], music, max_bytes=MAX_MEDIA)
+        probe=json.loads(run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(music)]))
+        if not any(s.get("codec_type")=="audio" for s in probe["streams"]):
+            raise ValueError("Music source does not contain an audio stream")
     return photos
 
 
@@ -245,7 +261,10 @@ def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: P
     args=["ffmpeg", "-hide_banner", "-y", "-loglevel", "error", "-nostdin"]
     for image,sec in zip(photos,widths):
         args.extend(["-loop","1","-framerate",str(fps),"-t",f"{sec:.5f}","-i",str(image)])
-    args.extend(["-stream_loop","-1","-i",str(media/"music_source.bin"),"-i",str(voice_file)])
+    has_music=(media/"music_source.bin").is_file()
+    if has_music:
+        args.extend(["-stream_loop","-1","-i",str(media/"music_source.bin")])
+    args.extend(["-i",str(voice_file)])
     f=[]
     for i,duration in enumerate(widths):
         # Pixel-sparing Ken Burns: true full-screen for the supplied 9:16 images.
@@ -255,11 +274,15 @@ def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: P
         f.append(f"[{i}:v]{scale},format=rgb24,{zoom},trim=duration={duration:.5f},setpts=PTS-STARTPTS,fps={fps},settb=AVTB,format=yuv420p[v{i}]")
     concatenated="".join(f"[v{i}]" for i in range(len(photos)))
     f.append(f"{concatenated}concat=n={len(photos)}:v=1:a=0[video]")
-    music_index=len(photos)
-    voice_index=music_index+1
-    f.append(f"[{music_index}:a:0]aresample=44100,aformat=channel_layouts=stereo,volume=0.18,atrim=duration={total:.5f},asetpts=PTS-STARTPTS[music]")
+    voice_index=len(photos)+(1 if has_music else 0)
+    if has_music:
+        music_index=len(photos)
+        f.append(f"[{music_index}:a:0]aresample=44100,aformat=channel_layouts=stereo,volume=0.18,atrim=duration={total:.5f},asetpts=PTS-STARTPTS[music]")
     f.append(f"[{voice_index}:a:0]aresample=44100,aformat=channel_layouts=stereo,volume=1.0,atrim=duration={total:.5f},asetpts=PTS-STARTPTS[voice]")
-    f.append("[music][voice]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[sound]")
+    if has_music:
+        f.append("[music][voice]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[sound]")
+    else:
+        f.append("[voice]alimiter=limit=0.95[sound]")
     args.extend(["-filter_complex",";".join(f),"-map","[video]","-map","[sound]","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p","-r",str(fps),"-c:a","aac","-b:a","192k","-ar","44100","-t",f"{total:.5f}","-movflags","+faststart",str(output)])
     run(args,timeout=360)
     return scene_boundaries
@@ -322,7 +345,7 @@ def main() -> None:
     output=folder/f"{slug}.mp4"
     bounds=make_video(photos,details,data,voice,starts,seconds,media,output)
     report=verify_output(output,photos,bounds,media)
-    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","scenes":[{"scene":i+1,"voice_range":x["voice_range"],"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x["image_url"]}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
+    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x["voice_range"],"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
     (folder/"report.json").write_text(json.dumps(timeline,ensure_ascii=False,indent=2),encoding="utf-8")
     shutil.copyfile(voice,folder/"voice_ptpt.wav")
     shutil.copyfile(media/"qa_five_scenes.jpg",folder/"preview_scenes.jpg")

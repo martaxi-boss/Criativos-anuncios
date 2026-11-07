@@ -122,7 +122,7 @@ def build_storyboard(
         raise ValueError("At least 2 genuine different photographs required")
 
     lines=list(voice_sentences) if voice_sentences is not None else auto_script(
-        meta.get("brand") or meta.get("title"), [p["name"] for p in distinct],
+        meta.get("brand") or meta.get("title"), [p["name"] for p in ordered],
         target_seconds)
     if not 3<=len(lines)<=18 or any(not isinstance(t,str) or not 4<=len(t.strip())<=170 for t in lines):
         raise ValueError("Narration must contain 3-18 natural short phrases")
@@ -138,6 +138,8 @@ def build_storyboard(
     for index,line in enumerate(lines[1:-1],start=1):
         requested=words(line)
         category_terms=requested.intersection(_CATEGORY_WORDS)
+        # Exact product/category words from the script drive the photograph
+        # selection. Visual quality is only the tie-breaker.
         photo=_choose(ordered,used,category_terms or None)
         shot={"kind":"product","voice_index":index,"caption":photo["name"],
               "spoken_text":line,"photo":photo,

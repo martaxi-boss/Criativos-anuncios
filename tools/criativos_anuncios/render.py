@@ -8,6 +8,7 @@ and audio QA fail closed. This tool NEVER publishes ads or changes a website.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import array
 import hashlib
 import ipaddress
@@ -31,6 +32,25 @@ MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/t
 CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx.json"
 MODEL_SHA256 = "223a7aaca69a155c61897e8ada7c3b13bc306e16c72dbb9c2fed733e2b0927d4"
 BASE_DIR = Path(__file__).resolve().parents[2]
+# These are the two actual audio references accepted by the owner, not Rui HD.
+APPROVED_VOICES = {
+    "piper-original-ptpt": "pt_PT-tugao-medium",
+    "raquel-neural-ptpt": "pt-PT-RaquelNeural",
+}
+
+
+def voice_profile(data: dict) -> str:
+    voice = data.get("voice")
+    if not isinstance(voice, dict):
+        raise ValueError("voice must be an object")
+    profile = voice.get("profile", "piper-original-ptpt")
+    if profile not in APPROVED_VOICES:
+        raise ValueError("Only the two owner-approved pt-PT voices are permitted")
+    model = voice.get("model")
+    if model is not None and model != APPROVED_VOICES[profile]:
+        raise ValueError("voice.model does not match the selected approved voice")
+    return profile
+
 
 
 def run(cmd: list[str], *, input_text: str | None = None, timeout: int = 240, capture: bool = True) -> str:
@@ -86,7 +106,8 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
         raise ValueError("id must be a safe short slug")
     if data.get("publish", False) is not False:
         raise ValueError("Publishing is not implemented; set publish=false")
-    text = data.get("voice", {}).get("sentences", [])
+    voice_profile(data)
+    text = data["voice"].get("sentences", [])
     if not isinstance(text, list) or not (1 <= len(text) <= 24) or not all(isinstance(s, str) and 4 <= len(s.strip()) <= 700 for s in text):
         raise ValueError("Supply 1-24 approved voice sentences")
     scenes = data.get("scenes", [])
@@ -206,6 +227,7 @@ def voice_part(path: Path) -> tuple[bytes, int, float, float]:
 
 def synthesize_voice(data: dict, media: Path, *, supplied: Path | None) -> tuple[Path, list[float], list[dict], float]:
     voices=data["voice"]["sentences"]
+    profile=voice_profile(data)
     voice_dir=media/"voice_parts"
     voice_dir.mkdir(exist_ok=True)
     if supplied:
@@ -214,6 +236,21 @@ def synthesize_voice(data: dict, media: Path, *, supplied: Path | None) -> tuple
             if not source.is_file():
                 raise ValueError(f"Missing pre-approved test voice part {i}")
             shutil.copyfile(source, voice_dir/f"part_{i}.wav")
+    elif profile == "raquel-neural-ptpt":
+        # Edge demo voice is online and has no established commercial licence.
+        # We use it ONLY for private previews and never silently fall back to Piper.
+        import edge_tts
+        for i, sentence in enumerate(voices):
+            mp3=voice_dir/f"part_{i}.mp3"
+            asyncio.run(edge_tts.Communicate(
+                sentence, APPROVED_VOICES[profile], rate="-8%", pitch="+0Hz"
+            ).save(str(mp3)))
+            if not mp3.is_file() or mp3.stat().st_size < 2500:
+                raise RuntimeError(f"Raquel sample {i} was not generated")
+            run(["ffmpeg","-hide_banner","-y","-loglevel","error","-nostdin",
+                 "-i",str(mp3),"-ar","44100","-ac","1",
+                 "-c:a","pcm_s16le",str(voice_dir/f"part_{i}.wav")],timeout=80)
+            print(f"Raquel part {i+1}/{len(voices)} PASS",flush=True)
     else:
         model=media/"pt_PT-tugao-medium.onnx"
         config=media/"pt_PT-tugao-medium.onnx.json"
@@ -402,7 +439,8 @@ def main() -> None:
     output=folder/f"{slug}.mp4"
     bounds=make_video(photos,details,data,voice,starts,seconds,media,output)
     report=verify_output(output,photos,bounds,media)
-    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","voice_length_scale":float(data["voice"].get("length_scale",1.0)),"spoken_words":sum(len(s.split()) for s in data["voice"]["sentences"]),"source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x.get("voice_range"),"voice_index":x.get("voice_index"),"narration_text":data["voice"]["sentences"][x["voice_index"]] if "voice_index" in x else None,"visual_caption":x.get("visual_caption"),"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
+    selected=voice_profile(data)
+    timeline={"id":slug,"voice_profile":selected,"voice_model":APPROVED_VOICES[selected],"voice_backend":"online-preview" if selected=="raquel-neural-ptpt" else "piper-local","voice_length_scale":float(data["voice"].get("length_scale",1.0)) if selected=="piper-original-ptpt" else None,"spoken_words":sum(len(s.split()) for s in data["voice"]["sentences"]),"source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x.get("voice_range"),"voice_index":x.get("voice_index"),"narration_text":data["voice"]["sentences"][x["voice_index"]] if "voice_index" in x else None,"visual_caption":x.get("visual_caption"),"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
     (folder/"report.json").write_text(json.dumps(timeline,ensure_ascii=False,indent=2),encoding="utf-8")
     shutil.copyfile(voice,folder/"voice_ptpt.wav")
     shutil.copyfile(media/"qa_five_scenes.jpg",folder/"preview_scenes.jpg")

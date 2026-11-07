@@ -1,0 +1,21 @@
+{
+  "id": "lowcost-europa-voz-suave-final-20261107",
+  "source_url": "https://lowcost-europa.duckdns.org/",
+  "target_duration_seconds": 22,
+  "visual_mode": "voice_only_clean",
+  "voice_preference": "approved-piper-pt-PT-tugao-medium",
+  "voice_settings": {
+    "length_scale": 1.28,
+    "between_pause_s": 0.65,
+    "intro_pause_s": 0.5,
+    "outro_pause_s": 1.35
+  },
+  "voice_sentences": [
+    "A Low Cost Europa é uma montra online de equipamentos para estética profissional.",
+    "Explora máquinas de Hífu e diferentes opções de tratamento.",
+    "Descobre também sistemas de laser e compara os preços apresentados.",
+    "Encontra o que procuras e confirma a compra diretamente com o vendedor. Low Cost Europa."
+  ],
+  "publish": false,
+  "commercial_release": false
+}

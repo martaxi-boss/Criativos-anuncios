@@ -90,8 +90,10 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
     if not isinstance(text, list) or not (1 <= len(text) <= 24) or not all(isinstance(s, str) and 4 <= len(s.strip()) <= 700 for s in text):
         raise ValueError("Supply 1-24 approved voice sentences")
     scenes = data.get("scenes", [])
-    evenly_timed = (data.get("source_capture") or {}).get("scene_timing") == "even"
-    max_scenes = 18 if evenly_timed else 12
+    mode = (data.get("source_capture") or {}).get("scene_timing")
+    evenly_timed = mode == "even"
+    voice_aligned = mode == "voice_aligned"
+    max_scenes = 18 if (evenly_timed or voice_aligned) else 12
     if not isinstance(scenes, list) or not 2 <= len(scenes) <= max_scenes:
         raise ValueError(f"Supply 2-{max_scenes} scenes")
     consumed = 0
@@ -116,6 +118,10 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
         if evenly_timed:
             if "voice_range" in scene:
                 raise ValueError("Evenly timed auto-capture scenes must not assign voice ranges")
+        elif voice_aligned:
+            voice_index=scene.get("voice_index")
+            if type(voice_index) is not int or not 0 <= voice_index < len(text):
+                raise ValueError("Every automatic shot needs a valid voice_index")
         else:
             indices = scene.get("voice_range")
             if not isinstance(indices, list) or len(indices) != 2 or any(type(v) is not int for v in indices):
@@ -124,7 +130,13 @@ def validate_request(data: dict) -> tuple[list[dict], list[str], str]:
             if start != consumed or not start < end <= len(text):
                 raise ValueError(f"scene {index}: voice ranges must be contiguous and cover the narration")
             consumed = end
-    if not evenly_timed and consumed != len(text):
+    if voice_aligned:
+        indices=[scene["voice_index"] for scene in scenes]
+        if (indices != sorted(indices) or indices[0]!=0 or
+                indices[-1]!=len(text)-1 or
+                set(indices)!=set(range(len(text)))):
+            raise ValueError("Shots must follow every spoken paragraph in order")
+    elif not evenly_timed and consumed != len(text):
         raise ValueError("The final scene must cover the final voice sentence")
     music = data.get("music")
     if music is None:
@@ -262,8 +274,26 @@ def synthesize_voice(data: dict, media: Path, *, supplied: Path | None) -> tuple
 def make_video(photos: list[Path], voices: list[dict], data: dict, voice_file: Path, starts: list[float], total: float, media: Path, output: Path, *, fps: int = 25) -> list[float]:
     # Automatic campaigns may have more visual shots than spoken phrases.
     # Legacy manually supplied ads retain paragraph-synced scene cuts.
-    if (data.get("source_capture") or {}).get("scene_timing") == "even":
+    mode=(data.get("source_capture") or {}).get("scene_timing")
+    if mode == "even":
         scene_boundaries=[total*i/len(photos) for i in range(len(photos)+1)]
+    elif mode == "voice_aligned":
+        # Align every visual with the spoken phrase it depicts, splitting the
+        # actual audio interval only when the same phrase has multiple photos.
+        counts={}
+        for scene in data["scenes"]:
+            index=scene["voice_index"]
+            counts[index]=counts.get(index,0)+1
+        seen={}
+        scene_boundaries=[]
+        for scene in data["scenes"]:
+            index=scene["voice_index"]
+            first=0 if index==0 else starts[index]
+            last=starts[index+1] if index+1<len(starts) else total
+            position=seen.get(index,0)
+            scene_boundaries.append(first+(last-first)*position/counts[index])
+            seen[index]=position+1
+        scene_boundaries.append(total)
     else:
         scene_boundaries=[0.0]
         for scene in data["scenes"][1:]:
@@ -362,7 +392,7 @@ def main() -> None:
     output=folder/f"{slug}.mp4"
     bounds=make_video(photos,details,data,voice,starts,seconds,media,output)
     report=verify_output(output,photos,bounds,media)
-    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","voice_length_scale":float(data["voice"].get("length_scale",1.0)),"spoken_words":sum(len(s.split()) for s in data["voice"]["sentences"]),"source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x.get("voice_range"),"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
+    timeline={"id":slug,"voice_model":"pt_PT-tugao-medium","voice_length_scale":float(data["voice"].get("length_scale",1.0)),"spoken_words":sum(len(s.split()) for s in data["voice"]["sentences"]),"source_capture":data.get("source_capture"),"approval_state":"preview_only" if data.get("source_capture") else "owner_review_required","scenes":[{"scene":i+1,"voice_range":x.get("voice_range"),"voice_index":x.get("voice_index"),"narration_text":data["voice"]["sentences"][x["voice_index"]] if "voice_index" in x else None,"visual_caption":x.get("visual_caption"),"starts_at":round(bounds[i],3),"ends_at":round(bounds[i+1],3),"image_source":x.get("image_url") or f"captured_scene_{x.get('capture_index',0):02d}"}for i,x in enumerate(scenes)],"speech":details,"qa":report,"published":False,"commercial_rights_checked":False}
     (folder/"report.json").write_text(json.dumps(timeline,ensure_ascii=False,indent=2),encoding="utf-8")
     shutil.copyfile(voice,folder/"voice_ptpt.wav")
     shutil.copyfile(media/"qa_five_scenes.jpg",folder/"preview_scenes.jpg")

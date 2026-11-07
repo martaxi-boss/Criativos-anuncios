@@ -54,7 +54,12 @@ def quality_metrics(source: bytes, natural_width: int = 0, natural_height: int =
     }
 
 def _logo(canvas: Image.Image, raw: bytes, box=(66,48,798,168)):
-    logo = image_from_bytes(raw)
+    if not isinstance(raw,bytes) or len(raw)<100 or len(raw)>6_000_000:
+        raise ValueError('Original brand logo missing or invalid')
+    with Image.open(io.BytesIO(raw)) as image:
+        if image.width<100 or image.height<20:
+            raise ValueError('Original logo too small')
+        logo=image.convert('RGB')
     logo = ImageOps.contain(logo, (box[2]-box[0],box[3]-box[1]), Image.Resampling.LANCZOS)
     x = box[0]+(box[2]-box[0]-logo.width)//2
     y = box[1]+(box[3]-box[1]-logo.height)//2

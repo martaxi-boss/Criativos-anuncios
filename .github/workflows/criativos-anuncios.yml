@@ -139,6 +139,8 @@ jobs:
             ad-output/report.json
             ad-output/site_capture.json
             ad-output/auto_request.json
+            ad-output/media_candidates.jpg
+            ad-output/media_candidates.json
             ad-output/work/scene_*.png
           if-no-files-found: error
           retention-days: 7

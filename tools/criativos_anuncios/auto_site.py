@@ -267,11 +267,72 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                                          "metrics":metrics})
                         continue
                     digests.add(digest)
-                    pool.append({"card_index":n,"image":raw,"name":name,
-                                 "digest":digest,"metrics":metrics})
+                    pool.append({"card_index":n,"family_index":n,"image":raw,"name":name,
+                                 "digest":digest,"metrics":metrics,"source":"homepage"})
                 except Exception as exc:
                     rejected.append({"card_index":n,"reason":str(exc)[:170]})
-            pool.sort(key=lambda x:x["metrics"]["quality_score"],reverse=True)
+            # Discover better product originals via the website's own public
+            # detail/gallery pages before deciding which media are advert-ready.
+            links=await cards.evaluate_all("""els => els.slice(0,5).map(e => {
+                const link=e.querySelector('a.product-card__media-link');
+                return link ? link.href : '';
+            }).filter(Boolean)""")
+            visited=set()
+            for family_index,link in enumerate(links[:5]):
+                parsed=urlsplit(link)
+                if (parsed.scheme!="https" or parsed.hostname != source_host or
+                        link in visited):
+                    continue
+                visited.add(link)
+                try:
+                    detail=await page.goto(link,wait_until="domcontentloaded",timeout=22000)
+                    if detail is None or detail.status>=400:
+                        raise RuntimeError("detail page unavailable")
+                    await page.wait_for_timeout(380)
+                    offers=page.locator("article.offer-card")
+                    for offer_index in range(min(await offers.count(),6)):
+                        offer=offers.nth(offer_index)
+                        image=offer.locator("img.offer-card__image").first
+                        if not await image.count():
+                            continue
+                        try:
+                            await image.scroll_into_view_if_needed(timeout=7000)
+                            await page.wait_for_timeout(140)
+                            dims=await image.evaluate(
+                                "(el)=>({w:el.naturalWidth,h:el.naturalHeight,loaded:el.complete})"
+                            )
+                            if not dims.get("loaded"):
+                                await page.wait_for_timeout(450)
+                                dims=await image.evaluate(
+                                    "(el)=>({w:el.naturalWidth,h:el.naturalHeight,loaded:el.complete})"
+                                )
+                            raw=await image.screenshot(timeout=11000,animations="disabled")
+                            metrics=quality_metrics(raw,int(dims["w"]),int(dims["h"]))
+                            title=" ".join((await offer.locator("h3.offer-title").first.inner_text()).split())
+                            digest=hashlib.sha256(raw).hexdigest()
+                            if not metrics["passes"] or digest in digests or not title:
+                                rejected.append({"detail_family":family_index,
+                                                 "offer_index":offer_index,
+                                                 "reason":"gallery-photo-quality-or-duplicate",
+                                                 "metrics":metrics})
+                                continue
+                            pool.append({"card_index":offer_index,
+                                         "family_index":family_index,
+                                         "image":raw,"name":title,
+                                         "digest":digest,"metrics":metrics,
+                                         "source":"public-detail-page"})
+                            digests.add(digest)
+                        except Exception as ex:
+                            rejected.append({"detail_family":family_index,
+                                             "offer_index":offer_index,
+                                             "reason":str(ex)[:140]})
+                except Exception as ex:
+                    rejected.append({"detail_family":family_index,
+                                     "reason":"detail-unavailable: "+str(ex)[:160]})
+            pool.sort(key=lambda x:(
+                x["metrics"]["quality_score"]+
+                (0.04 if x["source"]=="public-detail-page" else 0)),
+                reverse=True)
             if len(pool)<3:
                 raise RuntimeError(
                     "Premium creative not generated: only "
@@ -280,7 +341,16 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                     +str(min(await cards.count(),24))+
                     " cards. Do not substitute cluttered screenshots."
                 )
-            products = pool[:3]
+            products=[]
+            families=set()
+            for candidate in pool:
+                if candidate["family_index"] not in families:
+                    products.append(candidate)
+                    families.add(candidate["family_index"])
+                if len(products)==3:
+                    break
+            if len(products)<3:
+                raise RuntimeError("Insufficient distinct genuine product categories for premium creative")
             photos = [x["image"] for x in products]
             palette=meta["palette"]
             domain=(urlsplit(url).hostname or "")
@@ -302,9 +372,11 @@ async def capture(url: str, output: Path, stem: str, max_scenes: int = 5, voice_
                                    "main .product-card h3",
                                    "main a.hero-primary-cta"],
                 "selected":[{"category":x["name"],"card_index":x["card_index"],
+                             "family_index":x["family_index"],"source":x["source"],
                              "image_sha256":x["digest"],
                              "quality":x["metrics"]} for x in products],
                 "screening_rejections":rejected,
+                "candidate_count":len(pool), "detail_pages_visited":len(visited),
                 "quality_gate":"technical_screening_pass_editorial_review_pending"
             }
             lines = make_voice_lines(meta)
